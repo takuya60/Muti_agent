@@ -1,0 +1,67 @@
+{
+  "0": {
+    "source_id": "class_imbalance.md",
+    "title": "class_imbalance - class_imbalance",
+    "content": "# 类别不平衡处理 (Class Imbalance)\n\n- 知识点：类权重调整 (class_weight)、重采样、SMOTE\n\n如果正类样本极少，模型倾向于全部预测为负类也能得到很高的准确率。可以通过设置 `class_weight='balanced'` 让模型对少数类分错时给予更大的惩罚，或者使用欠采样、过采样（如 SMOTE）等技术平衡数据集。"
+  },
+  "1": {
+    "source_id": "confusion_matrix.md",
+    "title": "confusion_matrix - confusion_matrix",
+    "content": "# 混淆矩阵 (Confusion Matrix)\n\n- 知识点：分类评估、True Positive、False Positive\n\n单纯看准确率在类别不平衡时会具有欺骗性。混淆矩阵展示了模型预测类别与真实类别之间的完整对应关系，包含真正例 (TP)、假正例 (FP)、真负例 (TN) 和假负例 (FN)，是计算精准率和召回率的基础。"
+  },
+  "2": {
+    "source_id": "cross_validation.md",
+    "title": "cross_validation - cross_validation",
+    "content": "# 交叉验证 (Cross-Validation)\n\n- 知识点：K 折交叉验证、提升稳定性、减少方差\n\n单次 `train_test_split` 切分存在偶然性。K 折交叉验证将数据集均分为 K 份，每次用其中 1 份测试，其余 K-1 份训练，重复 K 次。最终取 K 次测试分数的平均值，能更稳定地评估模型的泛化能力。"
+  },
+  "3": {
+    "source_id": "data_leakage.md",
+    "title": "data_leakage - data_leakage",
+    "content": "# 机器学习数据泄露防控\n\n- 知识点：训练集、测试集、标准化、数据泄露、模型评估\n\n数据泄露是机器学习实训中的常见错误。如果在划分训练集和测试集之前对全量数据做标准化、特征选择或缺失值统计，测试集信息就会进入训练过程，导致评估结果虚高。\n\n正确做法是先划分训练集和测试集，再在训练集上执行 fit 或 fit_transform，对测试集只能执行 transform。任何从数据中学习统计量的步骤都应遵守这个原则。"
+  },
+  "4": {
+    "source_id": "logistic_regression.md",
+    "title": "logistic_regression - logistic_regression",
+    "content": "# 逻辑回归基础与实操规范\n\n- 知识点：逻辑回归、Sigmoid、二分类、模型训练、准确率、混淆矩阵\n\n逻辑回归常用于二分类任务。它先用线性函数得到样本打分，再通过 Sigmoid 函数把打分转换为 0 到 1 之间的概率。概率大于阈值时预测为正类，否则预测为负类。\n\n标准实操流程包括：加载数据、划分训练集与测试集、仅在训练集上拟合预处理器、训练模型、在测试集上评估模型。评估时不能只看准确率，还应结合混淆矩阵、precision、recall 和 f1-score。"
+  },
+  "5": {
+    "source_id": "model_evaluation.md",
+    "title": "model_evaluation - model_evaluation",
+    "content": "# 模型评估指标\n\n- 知识点：准确率、精确率、召回率、F1、混淆矩阵、分类报告\n\n分类模型评估不能只依赖准确率。准确率表示预测正确的总体比例，但在类别不平衡时可能误导判断。精确率关注预测为正类的样本中有多少是真的正类，召回率关注真实正类中有多少被找出来。\n\n混淆矩阵能展示 TP、FP、TN、FN 的分布，帮助学习者理解模型到底错在哪里。classification_report 可以同时输出 precision、recall、f1-score 和 support。"
+  },
+  "6": {
+    "source_id": "precision_recall_f1.md",
+    "title": "precision_recall_f1 - precision_recall_f1",
+    "content": "# 精准率、召回率与 F1 分数\n\n- 知识点：Precision, Recall, F1-Score\n\n- **精准率 (Precision)**：预测为正类的样本中，真正为正类的比例。适用于假阳性成本高的场景（如垃圾邮件拦截）。\n- **召回率 (Recall)**：所有真实为正类的样本中，被模型找出来的比例。适用于漏报成本高的场景（如疾病检测）。\n- **F1-Score**：精准率和召回率的调和平均数，综合衡量模型表现。"
+  },
+  "7": {
+    "source_id": "regularization.md",
+    "title": "regularization - regularization",
+    "content": "# 正则化 (Regularization)\n\n- 知识点：L1 正则化、L2 正则化、防止过拟合、超参数 C\n\n如果模型复杂度过高，在训练集上表现好但在测试集上表现差（过拟合），可以通过添加正则化惩罚项来限制权重大小。在 `sklearn` 的 `LogisticRegression` 中，参数 `C` 是正则化强度的倒数，`C` 越小正则化越强。"
+  },
+  "8": {
+    "source_id": "sigmoid_function.md",
+    "title": "sigmoid_function - sigmoid_function",
+    "content": "# Sigmoid 函数\n\n- 知识点：逻辑回归核心、概率映射、非线性变换\n\n逻辑回归利用线性方程 $z = w^T x + b$ 计算得分，然后通过 Sigmoid 函数 $\\sigma(z) = \\frac{1}{1 + e^{-z}}$ 将得分映射到 0 到 1 之间。这个输出值可以被解释为样本属于正类的概率。"
+  },
+  "9": {
+    "source_id": "sklearn_pipeline.md",
+    "title": "sklearn_pipeline - sklearn_pipeline",
+    "content": "# Sklearn Pipeline 构建\n\n- 知识点：工作流封装、Pipeline、防止数据泄露\n\n将数据预处理（如 `StandardScaler`）和模型训练（如 `LogisticRegression`）串联起来，可以使用 `Pipeline`。这不仅使代码更简洁，更重要的是在进行交叉验证时，能保证每次划分的数据都是在各自的训练集上进行预处理拟合，完全避免数据泄露。"
+  },
+  "10": {
+    "source_id": "standard_scaler.md",
+    "title": "standard_scaler - standard_scaler",
+    "content": "# 特征标准化 (StandardScaler)\n\n- 知识点：数据归一化、均值方差缩放、避免数据泄露\n\n不同特征的量纲不同，会导致模型收敛变慢甚至学偏。`StandardScaler` 将特征缩放到均值为 0、方差为 1 的分布。注意：为了避免测试集信息泄露，必须仅在训练集上调用 `fit`，然后对训练集和测试集都调用 `transform`。"
+  },
+  "11": {
+    "source_id": "threshold_tuning.md",
+    "title": "threshold_tuning - threshold_tuning",
+    "content": "# 阈值调整 (Threshold Tuning)\n\n- 知识点：分类阈值、PR 曲线、ROC 曲线\n\n`LogisticRegression` 默认阈值为 0.5。如果需要提高召回率（宁杀错不放过），可以降低阈值（如 0.3）；如果需要提高精准率，可以提高阈值。这可以通过 `predict_proba` 输出概率后手动判定来实现。"
+  },
+  "12": {
+    "source_id": "train_test_split.md",
+    "title": "train_test_split - train_test_split",
+    "content": "# 训练集与测试集划分\n\n- 知识点：数据切分、泛化能力评估、分层抽样 (stratify)\n\n为了评估模型在未知数据上的表现，我们需要将可用数据划分为训练集和测试集。通常比例为 80% 训练，20% 测试。如果是分类任务，使用 `stratify` 参数可以保证切分后的训练集和测试集中各类别比例一致。"
+  }
+}

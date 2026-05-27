@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python *)",
       "Bash(pdftotext *)",
-      "Bash(/e/Git/mingw64/bin/pdftotext.EXE *)"
+      "Bash(/e/Git/mingw64/bin/pdftotext.EXE *)",
+      "Bash(npm *)"
     ]
   }
 }
