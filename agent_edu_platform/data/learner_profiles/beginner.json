@@ -1,0 +1,17 @@
+{
+  "learner_id": "student_beginner",
+  "name": "基础薄弱型学习者",
+  "background": "大一学生，会一点 Python，但没有系统学过机器学习和线性代数",
+  "goal": "掌握逻辑回归分类模型实操",
+  "target_algorithm": "逻辑回归",
+  "preferred_style": "图解类比",
+  "available_time_per_week": 4,
+  "test_scores": {
+    "python": 62,
+    "linear_algebra": 42,
+    "ml_basic": 48,
+    "model_evaluation": 40
+  },
+  "known_skills": ["Python 基础语法"],
+  "weak_points": ["矩阵运算", "模型评估指标"]
+}

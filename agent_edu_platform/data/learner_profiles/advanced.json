@@ -1,0 +1,17 @@
+{
+  "learner_id": "student_advanced",
+  "name": "进阶提升型学习者",
+  "background": "已经做过简单分类实验，希望理解模型评估和参数调优",
+  "goal": "用逻辑回归完成更规范的分类建模与误差分析",
+  "target_algorithm": "逻辑回归",
+  "preferred_style": "项目挑战",
+  "available_time_per_week": 8,
+  "test_scores": {
+    "python": 90,
+    "linear_algebra": 84,
+    "ml_basic": 86,
+    "model_evaluation": 78
+  },
+  "known_skills": ["Python", "Scikit-learn", "基础机器学习流程"],
+  "weak_points": []
+}

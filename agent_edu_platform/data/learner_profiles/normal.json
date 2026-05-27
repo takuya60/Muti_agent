@@ -1,0 +1,17 @@
+{
+  "learner_id": "student_normal",
+  "name": "普通基础型学习者",
+  "background": "大二学生，学过 Python 和概率统计，但缺少完整机器学习项目经验",
+  "goal": "掌握逻辑回归从训练到评估的完整流程",
+  "target_algorithm": "逻辑回归",
+  "preferred_style": "案例驱动",
+  "available_time_per_week": 6,
+  "test_scores": {
+    "python": 82,
+    "linear_algebra": 70,
+    "ml_basic": 66,
+    "model_evaluation": 55
+  },
+  "known_skills": ["Python", "Pandas", "基础概率统计"],
+  "weak_points": ["模型评估指标"]
+}

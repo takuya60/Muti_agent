@@ -1,0 +1,20 @@
+[
+  {
+    "case_id": "tc_beginner_logistic",
+    "profile_file": "beginner.json",
+    "expected_level": "beginner_plus",
+    "expected_points": ["Sigmoid", "训练集", "测试集", "准确率", "混淆矩阵"]
+  },
+  {
+    "case_id": "tc_normal_logistic",
+    "profile_file": "normal.json",
+    "expected_level": "intermediate",
+    "expected_points": ["标准化", "模型训练", "classification_report"]
+  },
+  {
+    "case_id": "tc_advanced_logistic",
+    "profile_file": "advanced.json",
+    "expected_level": "advanced",
+    "expected_points": ["正则化", "阈值", "误差分析"]
+  }
+]

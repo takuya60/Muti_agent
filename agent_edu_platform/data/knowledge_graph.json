@@ -1,0 +1,15 @@
+{
+  "nodes": [
+    {"id": "python_basic", "label": "Python 基础"},
+    {"id": "numpy", "label": "NumPy 数组"},
+    {"id": "linear_algebra", "label": "线性代数"},
+    {"id": "logistic_regression", "label": "逻辑回归"},
+    {"id": "model_evaluation", "label": "模型评估"}
+  ],
+  "edges": [
+    ["python_basic", "numpy"],
+    ["numpy", "linear_algebra"],
+    ["linear_algebra", "logistic_regression"],
+    ["logistic_regression", "model_evaluation"]
+  ]
+}
