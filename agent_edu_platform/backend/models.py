@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, Integer, Boolean, DateTime, ForeignKey, JSON, Float
 from sqlalchemy.sql import func
 from backend.database import Base
 
@@ -11,11 +11,19 @@ class Learner(Base):
     background = Column(Text)
     goal = Column(Text)
     preferred_style = Column(String, default="案例驱动")
-    test_scores = Column(JSON, default={})
-    known_skills = Column(JSON, default=[])
-    weak_points = Column(JSON, default=[])
-    mastered_points = Column(JSON, default=[])        # 跨会话累积掌握的知识点
+    test_scores = Column(JSON, default=dict)
+    known_skills = Column(JSON, default=list)
+    weak_points = Column(JSON, default=list)
+    mastered_points = Column(JSON, default=list)        # 跨会话累积掌握的知识点
     current_level = Column(String, default="beginner_plus")
+    
+    # === 深度增强画像字段 (Enterprise-grade extensions) ===
+    bloom_taxonomy = Column(JSON, default=dict)         # 认知维度字典 (节点ID -> 布鲁姆层级)
+    learning_style_model = Column(JSON, default=dict)   # Felder-Silverman 学习风格雷达
+    attention_span_minutes = Column(Integer, default=30)# 平均专注时长（用于控制生成的篇幅）
+    frustration_index = Column(Float, default=0.0)      # 挫败感指数 (0.0~1.0)
+    engagement_score = Column(Float, default=1.0)       # 活跃参与度分数 (0.0~1.0)
+    knowledge_mastery = Column(JSON, default=dict)      # 知识图谱深度映射: {node_id: mastery_score(0~1或Elo)}
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

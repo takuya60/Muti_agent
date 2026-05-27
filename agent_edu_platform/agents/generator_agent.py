@@ -31,6 +31,8 @@ def run_generator_agent(state: WorkflowState) -> WorkflowState:
     })
     return state
 
+from knowledge_graph.graph_builder import KnowledgeGraphManager
+
 def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evidence_points: list) -> Optional[GeneratedResources]:
     api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
     base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL")
@@ -41,17 +43,32 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     
-    system_prompt = "你是一个经验丰富的机器学习讲师。你的任务是根据学习者级别和提供的知识点，生成JSON格式的个性化实训资源。"
+    # 结合知识图谱规划路径
+    kg = KnowledgeGraphManager()
+    mastered = state.learner_profile.get("mastered_points", [])
+    target_algo = state.target_algorithm
+    
+    current_focus = kg.recommend_next_node(target_algo, mastered)
+    full_path = kg.recommend_learning_path(target_algo, mastered)
+    
+    current_focus_name = kg.nodes_meta.get(current_focus, {}).get("name", current_focus)
+    path_names = [kg.nodes_meta.get(n, {}).get("name", n) for n in full_path]
+    
+    system_prompt = "你是一个经验丰富的机器学习讲师。你的任务是根据学习者的当前状态和知识图谱路径，生成JSON格式的个性化实训资源。"
     
     user_prompt = f"""
-    目标算法: {state.target_algorithm}
+    最终学习目标: {target_algo}
+    未掌握的学习路径: {' -> '.join(path_names)}
+    
+    【核心指令】: 每次只专注生成当前最紧缺的那一个前置知识点的讲义，学完一个再解锁下一个！
+    当前急需掌握的核心焦点: {current_focus_name}
+    
     学习者级别: {level}
-    可用知识点: {', '.join(evidence_points)}
     参考资料: {', '.join(evidence_titles)}
     
-    请严格按照以下JSON结构返回：
+    请围绕【{current_focus_name}】生成教学内容，严格按照以下JSON结构返回：
     {{
-        "title": "...",
+        "title": "{current_focus_name} 实训讲义 (通向 {target_algo} 的第1步)",
         "learner_level": "{level}",
         "theory_note": "...",
         "dataset_instruction": "...",
@@ -63,13 +80,11 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
             {{ "level": "标准", "question": "...", "answer": "...", "explanation": "..." }},
             {{ "level": "进阶", "question": "...", "answer": "...", "explanation": "..." }}
         ],
-        "learning_path": ["...", "..."],
+        "learning_path": {json.dumps(path_names, ensure_ascii=False)},
         "citations": {json.dumps(evidence_titles, ensure_ascii=False)}
     }}
     注意：只返回合法的JSON，不要有Markdown格式标记（如```json），确保能被JSON.loads解析。
-    对于advanced级别，实操代码需包含交叉验证、正则化等高级技巧。
-    对于beginner级别，实操代码应多注释，避免复杂公式。
-    对于intermediate级别，保持标准实验流程。
+    讲义内容必须紧紧围绕【{current_focus_name}】展开，不要超纲讲后面的节点。
     """
     
     try:

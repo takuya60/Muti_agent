@@ -30,3 +30,12 @@ class WorkflowState(BaseModel):
     evaluation: dict | None = None
     agent_events: list[dict] = Field(default_factory=list)
     retry_count: int = 0
+
+
+class ChatState(BaseModel):
+    session_id: str
+    user_message: str
+    chat_history: list[dict] = Field(default_factory=list)
+    current_resource_context: dict | None = None
+    next_node: str = ""
+    agent_response: str = ""

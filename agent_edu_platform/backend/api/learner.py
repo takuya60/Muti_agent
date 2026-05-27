@@ -1,30 +1,34 @@
-import json
-from pathlib import Path
-
-from fastapi import APIRouter
-
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from backend.database import get_db
 from schemas.learner_schema import LearnerProfile
-
+from backend.services import learner_service
 
 router = APIRouter(prefix="/learners", tags=["learners"])
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROFILE_DIR = PROJECT_ROOT / "data" / "learner_profiles"
-
 
 @router.get("/examples")
-def list_example_profiles() -> list[dict]:
-    profiles = []
-    for path in sorted(PROFILE_DIR.glob("*.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        profiles.append({
-            "profile_name": path.stem,
-            "learner_id": data["learner_id"],
-            "name": data["name"],
-            "goal": data["goal"],
-        })
-    return profiles
+def list_example_profiles(db: Session = Depends(get_db)):
+    """从数据库获取所有已注册的画像示例"""
+    learners = learner_service.get_all_learners(db)
+    return [
+        {
+            "profile_name": l.name,
+            "learner_id": l.id,
+            "name": l.name,
+            "goal": l.goal,
+        }
+        for l in learners
+    ]
 
+@router.get("/{learner_id}")
+def get_learner_profile(learner_id: str, db: Session = Depends(get_db)):
+    learner = learner_service.get_learner(db, learner_id)
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    return learner
 
 @router.post("/validate")
-def validate_profile(profile: LearnerProfile) -> dict:
-    return {"valid": True, "profile": profile.model_dump()}
+def validate_profile(profile: LearnerProfile, db: Session = Depends(get_db)) -> dict:
+    # 模拟验证并保存到数据库
+    learner = learner_service.create_or_update_learner(db, profile)
+    return {"valid": True, "profile": profile.model_dump(), "saved": True}

@@ -12,4 +12,3 @@ openai>=1.0.0
 sqlalchemy>=2.0.0
 faiss-cpu>=1.8.0
 sentence-transformers>=3.0.0
-networkx>=3.0

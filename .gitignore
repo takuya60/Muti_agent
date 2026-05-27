@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+agent_edu_platform/data/*.db
+agent_edu_platform/data/vector_store/
+agent_edu_platform/frontend-vue/node_modules/
+agent_edu_platform/frontend-vue/dist/

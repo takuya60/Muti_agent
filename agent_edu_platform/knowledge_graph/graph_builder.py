@@ -45,6 +45,36 @@ class KnowledgeGraphManager:
                 prereqs.append(u)
         return prereqs
 
+    def get_all_prerequisites(self, target_node: str) -> list[str]:
+        """获取目标节点的所有前置节点链（从最基础的开始）"""
+        if target_node not in self.graph:
+            return []
+        
+        prereqs_set = set()
+        queue = [target_node]
+        
+        while queue:
+            current = queue.pop(0)
+            direct_prereqs = self.get_prerequisites(current)
+            for p in direct_prereqs:
+                if p not in prereqs_set:
+                    prereqs_set.add(p)
+                    queue.append(p)
+        
+        subgraph = self.graph.subgraph(list(prereqs_set))
+        try:
+            return list(nx.topological_sort(subgraph))
+        except nx.NetworkXUnfeasible:
+            return list(prereqs_set)
+
+    def recommend_learning_path(self, target_node: str, mastered_nodes: list[str]) -> list[str]:
+        """推荐通向目标的完整未掌握学习路径"""
+        all_prereqs = self.get_all_prerequisites(target_node)
+        path = [p for p in all_prereqs if p not in mastered_nodes]
+        if target_node not in mastered_nodes:
+            path.append(target_node)
+        return path
+
     def recommend_next_node(self, target_node: str, mastered_nodes: list[str]) -> str:
         """
         核心算法：根据当前目标，和用户已掌握的知识点，推荐下一步应该学什么
