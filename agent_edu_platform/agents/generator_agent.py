@@ -18,6 +18,8 @@ ALGO_NAME_MAP: dict[str, str] = {
     "KNN": "knn",
     "朴素贝叶斯": "naive_bayes",
     "线性回归": "linear_regression",
+    "无监督学习": "unsupervised_learning",
+    "深度学习入门": "deep_learning_intro",
 }
 
 SKILL_NODE_MAP: dict[str, str] = {
@@ -39,6 +41,76 @@ LEVEL_MASTERED_NODES: dict[str, list[str]] = {
     "beginner_plus": ["python_basics"],
     "intermediate": ["python_basics", "numpy_basics", "pandas_basics", "train_test_split"],
     "advanced": ["python_basics", "numpy_basics", "pandas_basics", "linear_algebra", "probability", "train_test_split", "sigmoid_function"],
+}
+
+BASE_PATH_TEMPLATES: dict[str, list[str]] = {
+    "logistic_regression": [
+        "ml_task_framing",
+        "tabular_data_understanding",
+        "missing_value_handling",
+        "categorical_encoding",
+        "feature_scaling",
+        "train_validation_test_split",
+        "sklearn_workflow",
+        "sigmoid_function",
+        "cross_entropy_loss",
+        "logistic_regression",
+        "model_evaluation_metrics",
+        "confusion_matrix",
+        "precision_recall_f1",
+        "roc_auc_pr_curve",
+        "cross_validation",
+        "regularization",
+    ],
+    "decision_tree": [
+        "ml_task_framing",
+        "tabular_data_understanding",
+        "missing_value_handling",
+        "categorical_encoding",
+        "train_validation_test_split",
+        "sklearn_workflow",
+        "decision_tree",
+        "tree_pruning",
+        "model_evaluation_metrics",
+        "confusion_matrix",
+        "cross_validation",
+        "random_forest",
+        "gradient_boosting",
+    ],
+    "linear_regression": [
+        "ml_task_framing",
+        "tabular_data_understanding",
+        "missing_value_handling",
+        "outlier_handling",
+        "feature_engineering",
+        "train_validation_test_split",
+        "sklearn_workflow",
+        "linear_regression",
+        "regression_metrics",
+        "polynomial_regression",
+        "ridge_lasso",
+        "cross_validation",
+        "learning_validation_curve",
+    ],
+    "unsupervised_learning": [
+        "ml_task_framing",
+        "tabular_data_understanding",
+        "feature_scaling",
+        "pca_dimensionality_reduction",
+        "kmeans_clustering",
+        "clustering_evaluation",
+        "dbscan_clustering",
+    ],
+    "deep_learning_intro": [
+        "ml_task_framing",
+        "numpy_basics",
+        "feature_scaling",
+        "neural_network_intro",
+        "forward_backward_propagation",
+        "activation_functions",
+        "keras_sequential_intro",
+        "deep_learning_regularization",
+    ],
 }
 
 
@@ -74,9 +146,15 @@ def run_generator_agent(state: WorkflowState) -> WorkflowState:
             resources.learning_path.insert(1, f"对齐知识点：{', '.join(dict.fromkeys(evidence_points[:4]))}")
 
     resources.final_target = state.target_algorithm
+    if not resources.learning_path_nodes:
+        resources.learning_path_nodes = _build_learning_path(ALGO_NAME_MAP.get(state.target_algorithm, state.target_algorithm))
     resources.total_steps = max(1, len(resources.learning_path))
     if not resources.current_focus:
         resources.current_focus = resources.learning_path[0] if resources.learning_path else state.target_algorithm
+    if not resources.current_focus_id and resources.current_focus in resources.learning_path:
+        idx = resources.learning_path.index(resources.current_focus)
+        if idx < len(resources.learning_path_nodes):
+            resources.current_focus_id = resources.learning_path_nodes[idx]
     if resources.current_focus in resources.learning_path:
         resources.current_step_index = resources.learning_path.index(resources.current_focus) + 1
     else:
@@ -118,9 +196,11 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
     
     logger.info(f"知识图谱查询: target_algo='{target_algo}' -> target_node='{target_node}'")
     
-    current_focus = kg.recommend_next_node(target_node, mastered)
-    full_path = kg.recommend_learning_path(target_node, mastered)
-    
+    current_focus = _recommend_current_node(target_node, mastered)
+    full_path = _build_learning_path(target_node)
+    if current_focus not in full_path:
+        full_path.insert(0, current_focus)
+
     current_focus_name = kg.nodes_meta.get(current_focus, {}).get("name", current_focus)
     path_names = [kg.nodes_meta.get(n, {}).get("name", n) for n in full_path]
     current_step_index = full_path.index(current_focus) + 1 if current_focus in full_path else 1
@@ -184,9 +264,11 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
             {{ "level": "进阶", "question": "...", "answer": "...", "explanation": "..." }}
         ],
         "learning_path": {json.dumps(path_names, ensure_ascii=False)},
+        "learning_path_nodes": {json.dumps(full_path, ensure_ascii=False)},
         "citations": {json.dumps(evidence_titles, ensure_ascii=False)},
         "final_target": "{target_algo}",
         "current_focus": "{current_focus_name}",
+        "current_focus_id": "{current_focus}",
         "current_step_index": {current_step_index},
         "total_steps": {total_steps},
         "next_focus": "{next_focus_name}"
@@ -235,6 +317,17 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
             "summary": error_msg,
         })
         return None
+
+def _build_learning_path(target_node: str) -> list[str]:
+    return list(BASE_PATH_TEMPLATES.get(target_node, BASE_PATH_TEMPLATES["logistic_regression"]))
+
+
+def _recommend_current_node(target_node: str, mastered_nodes: list[str]) -> str:
+    for node in _build_learning_path(target_node):
+        if node not in mastered_nodes:
+            return node
+    return target_node
+
 
 def _infer_mastered_nodes(learner: dict, profile_level: str) -> list[str]:
     mastered = set(learner.get("mastered_points", []))
@@ -348,9 +441,11 @@ def _fallback_generation(state: WorkflowState, level: str, evidence_titles: list
             ),
         ],
         learning_path=path,
+        learning_path_nodes=path,
         citations=evidence_titles,
         final_target=state.target_algorithm,
         current_focus=current_focus,
+        current_focus_id=current_focus,
         current_step_index=1,
         total_steps=len(path),
         next_focus=next_focus,

@@ -22,9 +22,11 @@ class GeneratedResources(BaseModel):
     practice_guide: list[CodeStep]
     graded_quiz: list[QuizItem]
     learning_path: list[str]
+    learning_path_nodes: list[str] = Field(default_factory=list)
     citations: list[str] = Field(default_factory=list)
     final_target: str = ""
     current_focus: str = ""
+    current_focus_id: str = ""
     current_step_index: int = 1
     total_steps: int = 1
     next_focus: str = ""
