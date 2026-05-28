@@ -20,6 +20,27 @@ ALGO_NAME_MAP: dict[str, str] = {
     "线性回归": "linear_regression",
 }
 
+SKILL_NODE_MAP: dict[str, str] = {
+    "Python基础": "python_basics",
+    "Python 基础": "python_basics",
+    "Python 基础语法": "python_basics",
+    "Numpy/Pandas": "pandas_basics",
+    "NumPy": "numpy_basics",
+    "Pandas": "pandas_basics",
+    "微积分": "calculus",
+    "线性代数": "linear_algebra",
+    "概率论": "probability",
+    "逻辑回归": "logistic_regression",
+    "深度学习": "logistic_regression",
+}
+
+LEVEL_MASTERED_NODES: dict[str, list[str]] = {
+    "beginner": [],
+    "beginner_plus": ["python_basics"],
+    "intermediate": ["python_basics", "numpy_basics", "pandas_basics", "train_test_split"],
+    "advanced": ["python_basics", "numpy_basics", "pandas_basics", "linear_algebra", "probability", "train_test_split", "sigmoid_function"],
+}
+
 
 def run_generator_agent(state: WorkflowState) -> WorkflowState:
     diagnosis = state.diagnosis
@@ -52,6 +73,19 @@ def run_generator_agent(state: WorkflowState) -> WorkflowState:
         if not any("对齐知识点" in step for step in resources.learning_path):
             resources.learning_path.insert(1, f"对齐知识点：{', '.join(dict.fromkeys(evidence_points[:4]))}")
 
+    resources.final_target = state.target_algorithm
+    resources.total_steps = max(1, len(resources.learning_path))
+    if not resources.current_focus:
+        resources.current_focus = resources.learning_path[0] if resources.learning_path else state.target_algorithm
+    if resources.current_focus in resources.learning_path:
+        resources.current_step_index = resources.learning_path.index(resources.current_focus) + 1
+    else:
+        resources.current_step_index = 1
+    if resources.current_step_index < len(resources.learning_path):
+        resources.next_focus = resources.learning_path[resources.current_step_index]
+    else:
+        resources.next_focus = ""
+
     state.generated_resources = resources.model_dump()
     state.agent_events.append({
         "agent": "资源生成 Agent",
@@ -76,7 +110,9 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
     
     # 结合知识图谱规划路径 — 用映射后的英文 node id
     kg = KnowledgeGraphManager()
-    mastered = state.learner_profile.get("mastered_points", [])
+    learner = state.learner_profile
+    profile_level = learner.get("current_level", level)
+    mastered = _infer_mastered_nodes(learner, profile_level)
     target_algo = state.target_algorithm
     target_node = ALGO_NAME_MAP.get(target_algo, target_algo)
     
@@ -87,7 +123,12 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
     
     current_focus_name = kg.nodes_meta.get(current_focus, {}).get("name", current_focus)
     path_names = [kg.nodes_meta.get(n, {}).get("name", n) for n in full_path]
-    
+    current_step_index = full_path.index(current_focus) + 1 if current_focus in full_path else 1
+    total_steps = max(1, len(full_path))
+    next_focus_name = ""
+    if current_step_index < len(path_names):
+        next_focus_name = path_names[current_step_index]
+
     learner = state.learner_profile
     background = learner.get("background", "未提供")
     goal = learner.get("goal", "未提供")
@@ -101,8 +142,10 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
 
     user_prompt = f"""
     最终学习目标: {target_algo}
-    未掌握的学习路径: {' -> '.join(path_names)}
-    当前核心焦点: {current_focus_name}
+    当前关卡: {current_focus_name}
+    学习进度: 第 {current_step_index} / {total_steps} 关
+    下一关预告: {next_focus_name or '暂无，当前已接近终点'}
+    完整学习路径: {' -> '.join(path_names)}
 
     【学习者画像】
     背景: {background}
@@ -141,7 +184,12 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
             {{ "level": "进阶", "question": "...", "answer": "...", "explanation": "..." }}
         ],
         "learning_path": {json.dumps(path_names, ensure_ascii=False)},
-        "citations": {json.dumps(evidence_titles, ensure_ascii=False)}
+        "citations": {json.dumps(evidence_titles, ensure_ascii=False)},
+        "final_target": "{target_algo}",
+        "current_focus": "{current_focus_name}",
+        "current_step_index": {current_step_index},
+        "total_steps": {total_steps},
+        "next_focus": "{next_focus_name}"
     }}
     注意：只返回合法的JSON，不要有Markdown格式标记（如```json），确保能被JSON.loads解析。
     """
@@ -187,6 +235,22 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
             "summary": error_msg,
         })
         return None
+
+def _infer_mastered_nodes(learner: dict, profile_level: str) -> list[str]:
+    mastered = set(learner.get("mastered_points", []))
+    mastered.update(LEVEL_MASTERED_NODES.get(profile_level, []))
+
+    for skill in learner.get("known_skills", []):
+        node = SKILL_NODE_MAP.get(skill)
+        if node:
+            mastered.add(node)
+
+    for node, score in learner.get("knowledge_mastery", {}).items():
+        if score >= 0.7:
+            mastered.add(node)
+
+    return list(mastered)
+
 
 # 初始化函数属性
 _llm_generation._last_error = ""
@@ -253,8 +317,12 @@ def _fallback_generation(state: WorkflowState, level: str, evidence_titles: list
             ),
         ]
 
+    path = _fallback_path_for_level(level)
+    current_focus = path[0]
+    next_focus = path[1] if len(path) > 1 else ""
+
     resources = GeneratedResources(
-        title=f"{state.target_algorithm}个性化实训资源",
+        title=f"{current_focus} 个性化闯关资源",
         learner_level=level,
         theory_note=theory,
         dataset_instruction="使用 sklearn 内置 breast_cancer 二分类数据集。特征是肿瘤细胞的统计量，标签表示良性或恶性。先划分训练集和测试集，再只在训练集上拟合标准化器，避免数据泄露。",
@@ -281,8 +349,21 @@ def _fallback_generation(state: WorkflowState, level: str, evidence_titles: list
         ],
         learning_path=path,
         citations=evidence_titles,
+        final_target=state.target_algorithm,
+        current_focus=current_focus,
+        current_step_index=1,
+        total_steps=len(path),
+        next_focus=next_focus,
     )
     return resources
+
+def _fallback_path_for_level(level: str) -> list[str]:
+    if level == "advanced":
+        return ["快速复盘核心原理", "完成标准训练流程", "加入交叉验证", "分析模型局限并设计改进"]
+    if level == "intermediate":
+        return ["补齐薄弱知识点", "完成标准实验", "解释评估指标", "尝试参数调整"]
+    return ["理解分类任务", "掌握 Sigmoid 概率输出", "跟随代码完成训练", "用准确率和混淆矩阵评估"]
+
 
 def _beginner_theory(algorithm: str) -> str:
     return f"{algorithm}可以先理解成一个概率打分器：模型把多个特征加权求和，再通过 Sigmoid 函数压缩到 0 到 1 之间。数学基础薄弱时，不必先深究推导，重点理解它如何把样本分成两类，以及为什么要用训练集学习参数、用测试集检查泛化效果。"

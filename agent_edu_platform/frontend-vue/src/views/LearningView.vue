@@ -8,6 +8,12 @@ const router = useRouter()
 const learnerStore = useLearnerStore()
 const generationStore = useGenerationStore()
 
+const currentResources = () => generationStore.currentResource?.generated_resources
+const currentFocus = () => currentResources()?.current_focus || currentResources()?.learning_path?.[0] || '待生成'
+const finalTarget = () => currentResources()?.final_target || learnerStore.currentLearner?.target_algorithm || '未知目标'
+const currentStepIndex = () => currentResources()?.current_step_index || 1
+const totalSteps = () => currentResources()?.total_steps || currentResources()?.learning_path?.length || 1
+
 const message = ref('')
 const chatHistory = ref<any[]>([
   { role: 'system', content: '你好！根据你的画像分析，我们已经为你规划了专属的学习路径。现在正在为你生成第一关的讲义...' }
@@ -30,7 +36,7 @@ onMounted(async () => {
   
   try {
     await generationStore.generateResource(learnerStore.currentLearner)
-    chatHistory.value.push({ role: 'system', content: `讲义生成完毕！本次专注目标是：${generationStore.currentResource?.generated_resources?.title}。你可以随时提问。` })
+    chatHistory.value.push({ role: 'system', content: `第一关已解锁：${currentFocus()}。终点目标是 ${finalTarget()}，当前进度 ${currentStepIndex()} / ${totalSteps()}。你可以先阅读右侧讲义，也可以问我本关相关问题。` })
   } finally {
     if (loadingInterval) clearInterval(loadingInterval)
   }
@@ -119,11 +125,14 @@ const sendMessage = async () => {
     <header class="glass-header">
       <div class="logo">Agent<span>Edu</span></div>
       <div class="status-center">
-        <span class="label">当前目标：</span>
-        <span class="value">{{ learnerStore.currentLearner?.target_algorithm || '未知算法' }}</span>
+        <span class="label">当前关卡：</span>
+        <span class="value active-value">{{ currentFocus() }}</span>
         <el-divider direction="vertical" />
-        <span class="label">级别：</span>
-        <span class="value active-value">{{ learnerStore.currentLearner?.current_level || 'beginner' }}</span>
+        <span class="label">终点目标：</span>
+        <span class="value">{{ finalTarget() }}</span>
+        <el-divider direction="vertical" />
+        <span class="label">进度：</span>
+        <span class="value">{{ currentStepIndex() }} / {{ totalSteps() }}</span>
       </div>
       <div class="user-profile">
         <el-avatar size="small" src="https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png" />
@@ -190,6 +199,18 @@ const sendMessage = async () => {
         <el-tabs v-else-if="generationStore.currentResource?.generated_resources" type="border-card" class="transparent-tabs">
           <el-tab-pane label="📖 讲义">
             <div class="content-block">
+              <div class="checkpoint-card">
+                <div>
+                  <span class="checkpoint-label">当前关卡</span>
+                  <h3>{{ currentFocus() }}</h3>
+                  <p>终点目标：{{ finalTarget() }}</p>
+                </div>
+                <el-progress
+                  type="dashboard"
+                  :percentage="Math.round((currentStepIndex() / totalSteps()) * 100)"
+                  :width="88"
+                />
+              </div>
               <h3>{{ generationStore.currentResource.generated_resources.title }}</h3>
               <div class="generation-meta">
                 <el-tag
@@ -197,6 +218,9 @@ const sendMessage = async () => {
                   effect="dark"
                 >
                   生成模式：{{ generationStore.currentResource.generated_resources.generation_mode || 'unknown' }}
+                </el-tag>
+                <el-tag v-if="generationStore.currentResource.generated_resources.next_focus" effect="plain">
+                  下一关：{{ generationStore.currentResource.generated_resources.next_focus }}
                 </el-tag>
                 <el-tag v-if="generationStore.currentResource.session_id" effect="plain">
                   会话ID：{{ generationStore.currentResource.session_id }}
@@ -252,7 +276,10 @@ const sendMessage = async () => {
           <el-tab-pane label="🗺️ 学习路径">
             <div class="graph-placeholder">
               <template v-for="(node, idx) in generationStore.currentResource.generated_resources.learning_path" :key="idx">
-                <div class="node" :class="{ 'current': Number(idx) === 0, 'locked': Number(idx) > 0 }">{{ node }}</div>
+                <div class="node" :class="{ 'current': node === currentFocus(), 'locked': Number(idx) + 1 > currentStepIndex() }">
+                  <span class="node-index">{{ Number(idx) + 1 }}</span>
+                  {{ node }}
+                </div>
                 <div v-if="Number(idx) < generationStore.currentResource.generated_resources.learning_path.length - 1" class="line"></div>
               </template>
             </div>
@@ -479,6 +506,29 @@ const sendMessage = async () => {
   margin-bottom: 1rem;
 }
 
+.checkpoint-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(99, 102, 241, 0.12));
+  border: 1px solid rgba(6, 182, 212, 0.28);
+}
+.checkpoint-card h3 {
+  margin: 0.25rem 0;
+  color: var(--accent-cyan) !important;
+}
+.checkpoint-card p {
+  margin: 0;
+}
+.checkpoint-label {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
 .generation-meta {
   display: flex;
   gap: 0.75rem;
@@ -560,6 +610,20 @@ const sendMessage = async () => {
   border-radius: 20px;
   font-size: 0.9rem;
   border: 1px solid var(--border-light);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.node-index {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-size: 0.75rem;
 }
 .node.current {
   background: var(--accent-indigo);
