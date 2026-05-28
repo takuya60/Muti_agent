@@ -10,7 +10,7 @@ class Settings:
     APP_ENV: str = os.getenv("APP_ENV", "development")
     
     # Database
-    DATA_DIR = PROJECT_ROOT / "agent_edu_platform" / "data"
+    DATA_DIR = PROJECT_ROOT / "data"
     DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR}/agent_edu.db")
     
     # LLM (DeepSeek)

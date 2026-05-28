@@ -28,6 +28,14 @@ app.include_router(feedback_router)
 app.include_router(evaluation_router)
 app.include_router(chat_router)
 
+# 启动时自动建表
+from backend.database import engine, Base
+import backend.models  # noqa: F401 — 确保所有 ORM 模型已注册到 Base.metadata
+
+@app.on_event("startup")
+def on_startup():
+    Base.metadata.create_all(bind=engine)
+
 
 @app.get("/health")
 def health() -> dict:

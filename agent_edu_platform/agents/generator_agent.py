@@ -1,9 +1,25 @@
-import os
 import json
+import re
+import logging
 from typing import Optional
 from openai import OpenAI
+from backend.config import settings
 from schemas.agent_state_schema import WorkflowState
 from schemas.resource_schema import CodeStep, GeneratedResources, QuizItem
+
+logger = logging.getLogger(__name__)
+
+# 中文算法名 → 知识图谱英文 node id 映射
+ALGO_NAME_MAP: dict[str, str] = {
+    "逻辑回归": "logistic_regression",
+    "决策树": "decision_tree",
+    "随机森林": "random_forest",
+    "支持向量机": "svm",
+    "KNN": "knn",
+    "朴素贝叶斯": "naive_bayes",
+    "线性回归": "linear_regression",
+}
+
 
 def run_generator_agent(state: WorkflowState) -> WorkflowState:
     diagnosis = state.diagnosis
@@ -14,10 +30,23 @@ def run_generator_agent(state: WorkflowState) -> WorkflowState:
         evidence_points.extend(item.knowledge_points)
 
     # Try LLM generation first
+    generation_error = ""
     resources = _llm_generation(state, level, evidence_titles, evidence_points)
     
     if resources is None:
+        # 记录 fallback 事件
+        generation_error = getattr(_llm_generation, "_last_error", "LLM 未配置或调用失败")
+        logger.warning(f"LLM 生成失败，降级为 fallback 模式: {generation_error}")
+        state.agent_events.append({
+            "agent": "资源生成 Agent",
+            "status": "fallback",
+            "summary": f"LLM 生成失败，使用 fallback 模板: {generation_error}",
+        })
         resources = _fallback_generation(state, level, evidence_titles, evidence_points)
+        resources.generation_mode = "fallback"
+        resources.generation_error = generation_error
+    else:
+        resources.generation_mode = "llm"
 
     if evidence_points and len(resources.learning_path) > 0:
         if not any("对齐知识点" in step for step in resources.learning_path):
@@ -27,48 +56,79 @@ def run_generator_agent(state: WorkflowState) -> WorkflowState:
     state.agent_events.append({
         "agent": "资源生成 Agent",
         "status": "completed",
-        "summary": f"生成 {resources.title}，包含讲义、实操指南和分阶测试题",
+        "summary": f"[{resources.generation_mode}] 生成 {resources.title}，包含讲义、实操指南和分阶测试题",
     })
     return state
 
 from knowledge_graph.graph_builder import KnowledgeGraphManager
 
 def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evidence_points: list) -> Optional[GeneratedResources]:
-    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
-    base_url = os.environ.get("OPENAI_BASE_URL") or os.environ.get("DEEPSEEK_BASE_URL")
-    model_name = os.environ.get("OPENAI_MODEL") or os.environ.get("DEEPSEEK_MODEL") or "deepseek-chat"
+    api_key = settings.DEEPSEEK_API_KEY
+    base_url = settings.DEEPSEEK_BASE_URL
+    model_name = settings.DEEPSEEK_MODEL
     
     if not api_key:
+        _llm_generation._last_error = "DEEPSEEK_API_KEY 未配置（为空）"
+        logger.error(_llm_generation._last_error)
         return None
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     
-    # 结合知识图谱规划路径
+    # 结合知识图谱规划路径 — 用映射后的英文 node id
     kg = KnowledgeGraphManager()
     mastered = state.learner_profile.get("mastered_points", [])
     target_algo = state.target_algorithm
+    target_node = ALGO_NAME_MAP.get(target_algo, target_algo)
     
-    current_focus = kg.recommend_next_node(target_algo, mastered)
-    full_path = kg.recommend_learning_path(target_algo, mastered)
+    logger.info(f"知识图谱查询: target_algo='{target_algo}' -> target_node='{target_node}'")
+    
+    current_focus = kg.recommend_next_node(target_node, mastered)
+    full_path = kg.recommend_learning_path(target_node, mastered)
     
     current_focus_name = kg.nodes_meta.get(current_focus, {}).get("name", current_focus)
     path_names = [kg.nodes_meta.get(n, {}).get("name", n) for n in full_path]
     
-    system_prompt = "你是一个经验丰富的机器学习讲师。你的任务是根据学习者的当前状态和知识图谱路径，生成JSON格式的个性化实训资源。"
-    
+    learner = state.learner_profile
+    background = learner.get("background", "未提供")
+    goal = learner.get("goal", "未提供")
+    preferred_style = learner.get("preferred_style", "案例驱动")
+    known_skills = learner.get("known_skills", [])
+    weak_points = state.diagnosis.weak_points if state.diagnosis else learner.get("weak_points", [])
+    test_scores = learner.get("test_scores", {})
+    attention_span = learner.get("attention_span_minutes", 30)
+
+    system_prompt = "你是一个经验丰富的机器学习讲师。你的任务是根据学习者画像、诊断结果、知识图谱路径和检索证据，生成JSON格式的个性化实训资源。"
+
     user_prompt = f"""
     最终学习目标: {target_algo}
     未掌握的学习路径: {' -> '.join(path_names)}
-    
-    【核心指令】: 每次只专注生成当前最紧缺的那一个前置知识点的讲义，学完一个再解锁下一个！
-    当前急需掌握的核心焦点: {current_focus_name}
-    
-    学习者级别: {level}
-    参考资料: {', '.join(evidence_titles)}
-    
-    请围绕【{current_focus_name}】生成教学内容，严格按照以下JSON结构返回：
+    当前核心焦点: {current_focus_name}
+
+    【学习者画像】
+    背景: {background}
+    学习目标: {goal}
+    偏好风格: {preferred_style}
+    已知技能: {', '.join(known_skills) if known_skills else '暂无'}
+    薄弱点: {', '.join(weak_points) if weak_points else '暂无明显薄弱点'}
+    测评分数: {json.dumps(test_scores, ensure_ascii=False)}
+    推荐级别: {level}
+    单次专注时长: {attention_span} 分钟
+
+    参考资料: {', '.join(evidence_titles) if evidence_titles else '无'}
+    参考知识点: {', '.join(dict.fromkeys(evidence_points)) if evidence_points else '无'}
+
+    请围绕【{current_focus_name}】生成一份完整但不冗长的个性化实训讲义。要求：
+    1. 必须明显体现学习者画像差异，不要写成通用模板。
+    2. 如果学习者偏基础，要多用类比和分步解释；如果学习者偏进阶，要增加原理、指标和工程注意点。
+    3. 如果用户偏好图解类比/案例驱动/公式推导/项目挑战，讲义语气和例子要对应变化。
+    4. theory_note 至少 500 字，不能只写几句话。
+    5. practice_guide 至少 3 步，每步代码和解释要与当前学习者水平匹配。
+    6. graded_quiz 必须包含基础、标准、进阶三题，题目不能互相重复。
+    7. 即使当前焦点是前置知识点，也必须覆盖训练集、测试集、标准化、模型训练、准确率和混淆矩阵这 6 个实操闭环要素。
+
+    严格按照以下JSON结构返回：
     {{
-        "title": "{current_focus_name} 实训讲义 (通向 {target_algo} 的第1步)",
+        "title": "{current_focus_name} 个性化实训讲义",
         "learner_level": "{level}",
         "theory_note": "...",
         "dataset_instruction": "...",
@@ -84,7 +144,6 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
         "citations": {json.dumps(evidence_titles, ensure_ascii=False)}
     }}
     注意：只返回合法的JSON，不要有Markdown格式标记（如```json），确保能被JSON.loads解析。
-    讲义内容必须紧紧围绕【{current_focus_name}】展开，不要超纲讲后面的节点。
     """
     
     try:
@@ -95,18 +154,42 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
-            timeout=15.0
+            timeout=30.0
         )
         content = response.choices[0].message.content.strip()
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.endswith("```"):
-            content = content[:-3]
+        
+        # 兼容 ```json fenced block
+        fenced_match = re.search(r'```(?:json)?\s*\n?(.*?)```', content, re.DOTALL)
+        if fenced_match:
+            content = fenced_match.group(1).strip()
+        
         data = json.loads(content)
-        return GeneratedResources(**data)
-    except Exception as e:
-        print(f"LLM generation failed: {e}")
+        result = GeneratedResources(**data)
+        logger.info(f"LLM 生成成功: {result.title}")
+        return result
+    except json.JSONDecodeError as e:
+        error_msg = f"JSON 解析失败: {e}. 原始内容前500字: {content[:500]}"
+        _llm_generation._last_error = error_msg
+        logger.error(error_msg)
+        state.agent_events.append({
+            "agent": "资源生成 Agent",
+            "status": "llm_json_parse_error",
+            "summary": error_msg,
+        })
         return None
+    except Exception as e:
+        error_msg = f"LLM 调用异常: {type(e).__name__}: {e}"
+        _llm_generation._last_error = error_msg
+        logger.error(error_msg)
+        state.agent_events.append({
+            "agent": "资源生成 Agent",
+            "status": "llm_call_error",
+            "summary": error_msg,
+        })
+        return None
+
+# 初始化函数属性
+_llm_generation._last_error = ""
 
 def _fallback_generation(state: WorkflowState, level: str, evidence_titles: list, evidence_points: list) -> GeneratedResources:
     if level == "advanced":

@@ -60,6 +60,26 @@ const prevStep = () => {
   currentStep.value--
 }
 
+const buildTestScores = () => {
+  const baseScores: Record<string, number> = {
+    beginner: 35,
+    beginner_plus: 55,
+    intermediate: 75,
+    advanced: 90
+  }
+  const base = baseScores[formData.level] ?? 55
+  const hasPython = formData.knownSkills.includes('Python基础') || formData.knownSkills.includes('Numpy/Pandas')
+  const hasMath = formData.knownSkills.includes('线性代数') || formData.knownSkills.includes('微积分') || formData.knownSkills.includes('概率论')
+  const hasMl = formData.knownSkills.includes('逻辑回归') || formData.knownSkills.includes('深度学习')
+
+  return {
+    python: Math.min(100, base + (hasPython ? 12 : -8)),
+    linear_algebra: Math.min(100, base + (hasMath ? 10 : -10)),
+    ml_basic: Math.min(100, base + (hasMl ? 12 : -10)),
+    model_evaluation: Math.min(100, base + (hasMl ? 5 : -12))
+  }
+}
+
 const handleStart = async () => {
   if (!formData.level) {
     ElMessage.warning('请选择您的综合水平')
@@ -78,6 +98,7 @@ const handleStart = async () => {
       goal: formData.goal,
       background: formData.background,
       preferred_style: formData.stylePref,
+      test_scores: buildTestScores(),
       current_level: formData.level,
       known_skills: formData.knownSkills,
       // 以下为自动生成的认知/情绪初始值，匹配企业级 Schema

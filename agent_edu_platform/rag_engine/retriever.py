@@ -52,20 +52,25 @@ def vector_retrieve(query: str, limit: int = 3) -> list[KnowledgeEvidence]:
     store = get_vector_store()
     if not store:
         return []
-        
-    results = store.search(query, top_k=limit)
+
+    try:
+        results = store.search(query, top_k=limit)
+    except Exception as e:
+        print(f"向量检索失败，降级到关键词检索: {e}")
+        return []
+
     evidences = []
     for r in results:
         # Strict RAG 控制：如果相似度过低，直接舍弃
         if r.get("score", 0) < 0.3:
             continue
-            
+
         evidences.append(
             KnowledgeEvidence(
                 title=r.get("title", ""),
                 content=r.get("content", ""),
                 source_id=r.get("source_path", r.get("source_id", "")),
-                score=r.get("score", 0.0)
+                score=float(r.get("score", 0.0))
             )
         )
     return evidences

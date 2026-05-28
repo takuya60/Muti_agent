@@ -23,3 +23,6 @@ class GeneratedResources(BaseModel):
     graded_quiz: list[QuizItem]
     learning_path: list[str]
     citations: list[str] = Field(default_factory=list)
+    # 调试/可观测字段
+    generation_mode: str = "unknown"   # "llm" | "fallback"
+    generation_error: str = ""         # LLM 失败时记录原因

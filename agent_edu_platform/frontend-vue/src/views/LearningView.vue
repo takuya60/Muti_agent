@@ -3,7 +3,6 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useLearnerStore } from '../stores/learner'
 import { useGenerationStore } from '../stores/generation'
 import { useRouter } from 'vue-router'
-import { apiClient } from '../api'
 
 const router = useRouter()
 const learnerStore = useLearnerStore()
@@ -41,54 +40,74 @@ onUnmounted(() => {
   if (loadingInterval) clearInterval(loadingInterval)
 })
 
+const updateAssistantMessage = (index: number, content: string) => {
+  chatHistory.value[index] = {
+    ...chatHistory.value[index],
+    content
+  }
+}
+
+const appendAssistantMessage = (index: number, content: string) => {
+  updateAssistantMessage(index, chatHistory.value[index].content + content)
+}
+
 const sendMessage = async () => {
   if (message.value.trim()) {
     const userMsg = message.value
     chatHistory.value.push({ role: 'user', content: userMsg })
     message.value = ''
-    
-    const aiMsg = { role: 'system', content: '' }
-    chatHistory.value.push(aiMsg)
-    
+
+    const aiIndex = chatHistory.value.length
+    chatHistory.value.push({ role: 'system', content: '' })
+
     try {
       const sessionId = generationStore.currentResource?.session_id
-      if (!sessionId) throw new Error("缺少会话ID")
-      
+      if (!sessionId) throw new Error("缺少 session_id，资源生成可能失败，请刷新重试")
+
       const response = await fetch(`http://localhost:8000/sessions/${sessionId}/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role: 'user', content: userMsg })
       })
-      
-      if (!response.ok) throw new Error("Stream error")
-      
-      const reader = response.body?.getReader()
+
+      if (!response.ok) throw new Error(`Stream error: ${response.status}`)
+      if (!response.body) throw new Error("后端没有返回可读取的流")
+
+      const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      
-      if (reader) {
-        let buffer = ""
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buffer += decoder.decode(value, { stream: true })
-          
-          const parts = buffer.split('\n\n')
-          buffer = parts.pop() || "" 
-          
-          for (const part of parts) {
-            if (part.startsWith('data: ')) {
-              const dataStr = part.replace('data: ', '')
-              try {
-                const dataObj = JSON.parse(dataStr)
-                if (dataObj.done) break
-                aiMsg.content += dataObj.content
-              } catch (e) {}
+      let buffer = ""
+      let streamDone = false
+
+      while (!streamDone) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ""
+
+        for (const part of parts) {
+          if (part.startsWith('data: ')) {
+            const dataStr = part.replace('data: ', '')
+            try {
+              const dataObj = JSON.parse(dataStr)
+              if (dataObj.done) {
+                streamDone = true
+                break
+              }
+              appendAssistantMessage(aiIndex, dataObj.content || '')
+            } catch (e) {
+              appendAssistantMessage(aiIndex, `\n[消息解析失败：${e instanceof Error ? e.message : String(e)}]`)
             }
           }
         }
       }
+
+      if (!chatHistory.value[aiIndex].content) {
+        updateAssistantMessage(aiIndex, '（连接被中断，这可能是因为后台服务发生热更新，请重试）')
+      }
     } catch (e) {
-      aiMsg.content = '抱歉，老师正在努力连接信号...请稍后再试！'
+      updateAssistantMessage(aiIndex, `请求失败：${e instanceof Error ? e.message : '未知错误，请稍后再试'}`)
     }
   }
 }
@@ -172,6 +191,25 @@ const sendMessage = async () => {
           <el-tab-pane label="📖 讲义">
             <div class="content-block">
               <h3>{{ generationStore.currentResource.generated_resources.title }}</h3>
+              <div class="generation-meta">
+                <el-tag
+                  :type="generationStore.currentResource.generated_resources.generation_mode === 'llm' ? 'success' : 'warning'"
+                  effect="dark"
+                >
+                  生成模式：{{ generationStore.currentResource.generated_resources.generation_mode || 'unknown' }}
+                </el-tag>
+                <el-tag v-if="generationStore.currentResource.session_id" effect="plain">
+                  会话ID：{{ generationStore.currentResource.session_id }}
+                </el-tag>
+              </div>
+              <el-alert
+                v-if="generationStore.currentResource.generated_resources.generation_error"
+                :title="generationStore.currentResource.generated_resources.generation_error"
+                type="warning"
+                show-icon
+                :closable="false"
+                class="generation-error"
+              />
               <p>{{ generationStore.currentResource.generated_resources.theory_note }}</p>
               
               <h4 v-if="generationStore.currentResource.generated_resources.citations.length" class="citation-title">📚 引用参考</h4>
@@ -191,7 +229,7 @@ const sendMessage = async () => {
             <div class="content-block">
               <p>{{ generationStore.currentResource.generated_resources.dataset_instruction }}</p>
               <div v-for="(step, idx) in generationStore.currentResource.generated_resources.practice_guide" :key="idx" class="code-block-wrapper">
-                <h4>Step {{ idx + 1 }}: {{ step.step_name }}</h4>
+                <h4>Step {{ Number(idx) + 1 }}: {{ step.step_name }}</h4>
                 <div class="code-block">
                   <div class="code-header">
                     <span>python</span>
@@ -214,8 +252,8 @@ const sendMessage = async () => {
           <el-tab-pane label="🗺️ 学习路径">
             <div class="graph-placeholder">
               <template v-for="(node, idx) in generationStore.currentResource.generated_resources.learning_path" :key="idx">
-                <div class="node" :class="{ 'current': idx === 0, 'locked': idx > 0 }">{{ node }}</div>
-                <div v-if="idx < generationStore.currentResource.generated_resources.learning_path.length - 1" class="line"></div>
+                <div class="node" :class="{ 'current': Number(idx) === 0, 'locked': Number(idx) > 0 }">{{ node }}</div>
+                <div v-if="Number(idx) < generationStore.currentResource.generated_resources.learning_path.length - 1" class="line"></div>
               </template>
             </div>
           </el-tab-pane>
@@ -438,6 +476,16 @@ const sendMessage = async () => {
 }
 .content-block p {
   color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.generation-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.generation-error {
   margin-bottom: 1rem;
 }
 
