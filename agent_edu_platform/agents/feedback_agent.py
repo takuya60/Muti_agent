@@ -26,4 +26,26 @@ def run_feedback_agent(state: WorkflowState, quiz_accuracy: float | None = None,
         "status": "completed",
         "summary": action,
     })
+    _sync_agent_trace(state.generated_resources or {}, action)
     return state
+
+
+def _sync_agent_trace(resources: dict, action: str) -> None:
+    trace = resources.get("agent_trace") or {}
+    steps = trace.get("steps") or []
+    next_focus = resources.get("next_focus") or "当前阶段复盘"
+    for step in steps:
+        if step.get("agent") == "反馈规划 Agent":
+            step["status"] = "completed"
+            step["summary"] = action
+            step["details"] = [f"下一关：{next_focus}"]
+            return
+    steps.append({
+        "agent": "反馈规划 Agent",
+        "title": "规划下一步",
+        "status": "completed",
+        "summary": action,
+        "details": [f"下一关：{next_focus}"],
+    })
+    trace["steps"] = steps
+    resources["agent_trace"] = trace

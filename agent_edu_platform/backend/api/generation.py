@@ -13,7 +13,7 @@ router = APIRouter(prefix="/generation", tags=["generation"])
 def generate_resources(profile: LearnerProfile, db: DbSession = Depends(get_db)) -> dict:
     session_in = SessionCreate(
         learner_id=profile.learner_id,
-        target_algorithm="logistic_regression"
+        target_algorithm=profile.target_algorithm
     )
     db_session = session_service.create_session(db, session_in)
     

@@ -1,50 +1,49 @@
 import logging
-from openai import OpenAI
-from backend.config import settings
 from schemas.agent_state_schema import ChatState
 
 logger = logging.getLogger(__name__)
 
+# 只有命中这些明显无关关键词时才拒答，其余全部放行
+_OFF_TOPIC_KEYWORDS = [
+    "天气", "菜谱", "做饭", "炒菜", "外卖", "游戏攻略",
+    "追星", "八卦", "综艺", "电视剧", "电影推荐",
+    "星座", "算命", "占卜", "塔罗",
+]
+
 
 def run_router_agent(state: ChatState) -> ChatState:
-    api_key = settings.DEEPSEEK_API_KEY
-    base_url = settings.DEEPSEEK_BASE_URL
-    model_name = settings.DEEPSEEK_MODEL
-    
-    if not api_key:
-        logger.error("Router Agent: DEEPSEEK_API_KEY 未配置，默认分类为 off_topic")
-        state.next_node = "off_topic"
+    """
+    意图分类器（规则版）。
+
+    产品策略（来自 product_discussion_update_summary.md §9）：
+      在学习页内的 AI 导师，默认用户问题与当前关卡相关。
+      只有明显无关的问题才拒答。
+
+    因此不再使用 LLM 做路由判断（既慢又不稳定），
+    改为简单关键词匹配：只拦截极少数明确无关的消息。
+    """
+    user_msg = state.user_message.strip()
+
+    # 空消息直接放行
+    if not user_msg:
+        state.next_node = "ask_question"
         return state
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    
-    system_prompt = """你是一个意图分类器。用户的输入分为三类：
-1. ask_question：用户针对正在学习的内容提问，或者要求继续讲解、推进进度等。
-2. submit_quiz：用户在做题，提交了自己的答案。
-3. off_topic：用户在完全闲聊、偏题（如问菜谱、天气等无关内容）。
+    # 检查是否包含测验提交的典型标记
+    msg_lower = user_msg.lower()
+    quiz_markers = ["答案是", "选 ", "选a", "选b", "选c", "选d", "我选", "answer"]
+    if any(marker in msg_lower for marker in quiz_markers):
+        state.next_node = "submit_quiz"
+        logger.info(f"Router Agent (规则): '{user_msg}' -> submit_quiz")
+        return state
 
-请仅输出上述三个类别名称之一，不要输出任何额外字符。"""
-
-    try:
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": state.user_message}
-            ],
-            temperature=0.0,
-            max_tokens=10
-        )
-        intent = response.choices[0].message.content.strip().lower()
-        logger.info(f"Router Agent 意图分类: '{state.user_message}' -> '{intent}'")
-        if "ask_question" in intent:
-            state.next_node = "ask_question"
-        elif "submit_quiz" in intent:
-            state.next_node = "submit_quiz"
-        else:
-            state.next_node = "off_topic"
-    except Exception as e:
-        logger.error(f"Router Agent 调用失败: {type(e).__name__}: {e}")
+    # 只拦截极少数明确无关的消息
+    if any(keyword in user_msg for keyword in _OFF_TOPIC_KEYWORDS):
         state.next_node = "off_topic"
-        
+        logger.info(f"Router Agent (规则): '{user_msg}' -> off_topic (命中关键词)")
+        return state
+
+    # 默认全部视为与学习相关
+    state.next_node = "ask_question"
+    logger.info(f"Router Agent (规则): '{user_msg}' -> ask_question")
     return state

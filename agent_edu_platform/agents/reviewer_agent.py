@@ -51,4 +51,24 @@ def run_reviewer_agent(state: WorkflowState) -> WorkflowState:
         "status": status,
         "summary": summary,
     })
+    _sync_agent_trace(resources, "审核纠偏 Agent", status, summary)
     return state
+
+
+def _sync_agent_trace(resources: dict, agent: str, status: str, summary: str) -> None:
+    trace = resources.get("agent_trace") or {}
+    steps = trace.get("steps") or []
+    for step in steps:
+        if step.get("agent") == agent:
+            step["status"] = status
+            step["summary"] = summary
+            return
+    steps.append({
+        "agent": agent,
+        "title": "检查内容质量",
+        "status": status,
+        "summary": summary,
+        "details": ["结构完整性", "引用来源", "数据泄露风险", "难度匹配"],
+    })
+    trace["steps"] = steps
+    resources["agent_trace"] = trace

@@ -7,6 +7,7 @@ import 'katex/dist/katex.min.css'
 import { useLearnerStore } from '../stores/learner'
 import { useGenerationStore } from '../stores/generation'
 import { useRouter } from 'vue-router'
+import { apiClient } from '../api'
 
 const md = new MarkdownIt({
   html: false,
@@ -21,7 +22,11 @@ const generationStore = useGenerationStore()
 const theme = ref<'light' | 'dark'>('light')
 const message = ref('')
 const activeTab = ref<'note' | 'code' | 'quiz'>('note')
-const activeDrawer = ref<'profile' | 'references' | null>(null)
+const activeDrawer = ref<'profile' | 'references' | 'agent' | 'report' | null>(null)
+const readConfirmed = ref(false)
+const codeConfirmed = ref(false)
+const selectedAnswers = ref<Record<string, string>>({})
+const quizSubmitted = ref(false)
 const streamingIndex = ref<number | null>(null)
 const chatHistoryRef = ref<HTMLElement | null>(null)
 const chatHistory = ref<any[]>([
@@ -40,6 +45,24 @@ const finalTarget = () => currentResources()?.final_target || learnerStore.curre
 const currentStepIndex = () => currentResources()?.current_step_index || 1
 const totalSteps = () => currentResources()?.total_steps || currentResources()?.learning_path?.length || 1
 const progressPercent = computed(() => Math.min(100, Math.round((currentStepIndex() / totalSteps()) * 100)))
+const lessonModules = computed(() => {
+  const resource = currentResources()
+  if (!resource) return []
+  if (resource.lesson_modules?.length) return resource.lesson_modules
+  return [
+    { title: '核心讲义', type: 'concept', content: resource.theory_note, default_open: true },
+    { title: '数据与任务说明', type: 'dataset', content: resource.dataset_instruction, default_open: false }
+  ]
+})
+const completionRequirements = computed(() => currentResources()?.completion_requirements || { min_quiz_score: 60 })
+const quizScore = computed(() => {
+  const quizzes = currentResources()?.graded_quiz || []
+  if (!quizzes.length) return 0
+  const answered = quizzes.filter((_: any, idx: number) => selectedAnswers.value[String(idx)]?.trim()).length
+  return Math.round((answered / quizzes.length) * 100)
+})
+const quizCompleted = computed(() => quizSubmitted.value && quizScore.value >= (completionRequirements.value.min_quiz_score || 60))
+const canCompleteStep = computed(() => readConfirmed.value && codeConfirmed.value && quizCompleted.value)
 
 const renderMarkdown = (source?: string) => DOMPurify.sanitize(md.render(source || ''))
 
@@ -68,10 +91,12 @@ onMounted(async () => {
   }, 1800)
 
   try {
-    await generationStore.generateResource(learnerStore.currentLearner)
+    if (!generationStore.currentResource) {
+      await generationStore.generateResource(learnerStore.currentLearner)
+    }
     chatHistory.value.push({
       role: 'system',
-      content: `第一关已解锁：**${currentFocus()}**。终点目标是 **${finalTarget()}**，当前进度 ${currentStepIndex()} / ${totalSteps()}。`
+      content: `当前关卡已解锁：**${currentFocus()}**。目标方向是 **${finalTarget()}**，当前进度 ${currentStepIndex()} / ${totalSteps()}。`
     })
     await scrollChatToBottom()
   } finally {
@@ -94,31 +119,52 @@ const appendAssistantMessage = (index: number, content: string) => {
 
 const completeCurrentStep = async () => {
   const learner = learnerStore.currentLearner
-  if (!learner || generationStore.isGenerating) return
+  if (!learner || generationStore.isGenerating || !canCompleteStep.value) return
 
   const focusId = currentFocusId()
   const masteredPoints = Array.from(new Set([...(learner.mastered_points || []), focusId]))
   const knowledgeMastery = {
     ...(learner.knowledge_mastery || {}),
-    [focusId]: 0.9
+    [focusId]: Math.max(0.85, quizScore.value / 100)
   }
 
   learnerStore.currentLearner = {
     ...learner,
     mastered_points: masteredPoints,
-    knowledge_mastery: knowledgeMastery
+    knowledge_mastery: knowledgeMastery,
+    quiz_scores: {
+      ...(learner.quiz_scores || {}),
+      [focusId]: quizScore.value
+    }
   }
 
   chatHistory.value.push({
     role: 'system',
-    content: `已记录你完成了 **${currentFocus()}**。我正在为你解锁下一关。`
+    content: `已记录你完成了 **${currentFocus()}**，本关测验得分 **${quizScore.value}**。我正在为你解锁下一关。`
   })
+  readConfirmed.value = false
+  codeConfirmed.value = false
+  selectedAnswers.value = {}
+  quizSubmitted.value = false
   await generationStore.generateResource(learnerStore.currentLearner)
   chatHistory.value.push({
     role: 'system',
     content: `下一关已解锁：**${currentFocus()}**。当前进度 ${currentStepIndex()} / ${totalSteps()}。`
   })
   await scrollChatToBottom()
+}
+
+const submitQuiz = () => {
+  quizSubmitted.value = true
+}
+
+const setQuizAnswer = (index: string | number, value: string) => {
+  selectedAnswers.value[String(index)] = value
+}
+
+const askQuickQuestion = (content: string) => {
+  message.value = content
+  sendMessage()
 }
 
 const sendMessage = async () => {
@@ -137,7 +183,7 @@ const sendMessage = async () => {
     const sessionId = generationStore.currentResource?.session_id
     if (!sessionId) throw new Error('缺少 session_id，资源生成可能失败，请刷新重试')
 
-    const response = await fetch(`http://localhost:8001/sessions/${sessionId}/chat/stream`, {
+    const response = await fetch(`${apiClient.defaults.baseURL}/sessions/${sessionId}/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: 'user', content: userMsg })
@@ -197,14 +243,19 @@ const sendMessage = async () => {
       </div>
       <div class="course-meta">
         <span>当前关卡：{{ currentFocus() }}</span>
-        <span>终点：{{ finalTarget() }}</span>
+        <span>阶段：{{ currentResources()?.current_stage || '-' }}</span>
+        <span>分支：{{ currentResources()?.current_branch || finalTarget() }}</span>
         <span>{{ currentStepIndex() }} / {{ totalSteps() }}</span>
       </div>
       <div class="top-actions">
-        <button type="button" class="complete-button" :disabled="generationStore.isGenerating || !currentResources()" @click="completeCurrentStep">
+        <button type="button" class="complete-button" :disabled="generationStore.isGenerating || !currentResources() || !canCompleteStep" @click="completeCurrentStep">
           完成本关，进入下一关
         </button>
+        <button type="button" @click="router.push('/dashboard')">学习首页</button>
+        <button type="button" @click="router.push('/path')">学习路径</button>
         <button type="button" @click="activeDrawer = 'profile'">学习画像</button>
+        <button type="button" @click="activeDrawer = 'agent'">Agent 过程</button>
+        <button type="button" @click="activeDrawer = 'report'">阶段报告</button>
         <button type="button" @click="activeDrawer = 'references'">引用资料</button>
         <button type="button" @click="toggleTheme">{{ theme === 'light' ? '夜间模式' : '正常色调' }}</button>
       </div>
@@ -247,6 +298,11 @@ const sendMessage = async () => {
               <p class="section-kicker">当前关卡</p>
               <h1>{{ currentFocus() }}</h1>
               <span>终点目标：{{ finalTarget() }}</span>
+              <p class="recommend-reason">{{ currentResources()?.recommended_reason }}</p>
+              <p v-if="currentResources()" :class="['mode-badge', currentResources()?.generation_mode]">
+                生成模式：{{ currentResources()?.generation_mode === 'llm' ? 'LLM 生成' : 'Fallback 模板' }}
+                <span v-if="currentResources()?.generation_error">｜{{ currentResources()?.generation_error }}</span>
+              </p>
             </div>
             <div class="lesson-status">
               <strong>{{ progressPercent }}%</strong>
@@ -260,7 +316,21 @@ const sendMessage = async () => {
             <button :class="{ active: activeTab === 'quiz' }" @click="activeTab = 'quiz'">测评</button>
           </nav>
 
-          <section v-show="activeTab === 'note'" class="markdown-body" v-html="renderMarkdown(currentResources()?.theory_note)"></section>
+          <section v-show="activeTab === 'note'" class="lesson-modules">
+            <details
+              v-for="module in lessonModules"
+              :key="`${module.type}-${module.title}`"
+              class="module-card"
+              :open="module.default_open"
+            >
+              <summary>{{ module.title }}</summary>
+              <div class="markdown-body" v-html="renderMarkdown(module.content)"></div>
+            </details>
+            <label class="confirm-row">
+              <input v-model="readConfirmed" type="checkbox" />
+              我已阅读并理解本关核心概念
+            </label>
+          </section>
 
           <section v-show="activeTab === 'code'" class="code-section">
             <div class="markdown-body" v-html="renderMarkdown(currentResources()?.dataset_instruction)"></div>
@@ -271,19 +341,55 @@ const sendMessage = async () => {
               </header>
               <pre><code>{{ step.python_code }}</code></pre>
               <div class="markdown-body compact" v-html="renderMarkdown(step.explanation)"></div>
+              <div v-if="step.expected_output" class="expected-output">
+                <strong>预期输出</strong>
+                <p>{{ step.expected_output }}</p>
+              </div>
+              <div v-if="step.common_errors?.length" class="common-errors">
+                <strong>常见报错与修复</strong>
+                <article v-for="err in step.common_errors" :key="err.error">
+                  <b>{{ err.error }}</b>
+                  <p>{{ err.cause }}</p>
+                  <small>{{ err.fix }}</small>
+                </article>
+              </div>
             </article>
+            <div v-if="currentResources()?.common_errors?.length" class="common-errors global-errors">
+              <strong>本关常见错误</strong>
+              <article v-for="err in currentResources()?.common_errors" :key="err.error">
+                <b>{{ err.error }}</b>
+                <p>{{ err.cause }}</p>
+                <small>{{ err.fix }}</small>
+              </article>
+            </div>
+            <label class="confirm-row">
+              <input v-model="codeConfirmed" type="checkbox" />
+              我理解了本关代码流程和常见错误
+            </label>
           </section>
 
           <section v-show="activeTab === 'quiz'" class="quiz-section">
             <article v-for="(quiz, idx) in currentResources()?.graded_quiz" :key="idx" class="quiz-card">
               <span>{{ quiz.level }}</span>
               <h3>{{ quiz.question }}</h3>
-              <details>
+              <label class="answer-input">
+                <span>你的答案</span>
+                <textarea :value="selectedAnswers[String(idx)] || ''" rows="2" placeholder="输入你的理解或参考答案关键词" @input="setQuizAnswer(idx, ($event.target as HTMLTextAreaElement).value)"></textarea>
+              </label>
+              <details :open="quizSubmitted">
                 <summary>查看参考答案与解析</summary>
                 <p><strong>答案：</strong>{{ quiz.answer }}</p>
                 <div class="markdown-body compact" v-html="renderMarkdown(quiz.explanation)"></div>
               </details>
             </article>
+            <div class="completion-card">
+              <h3>完成条件</h3>
+              <label><input v-model="readConfirmed" type="checkbox" /> 已阅读核心概念</label>
+              <label><input v-model="codeConfirmed" type="checkbox" /> 已理解代码流程</label>
+              <label><input :checked="quizCompleted" type="checkbox" disabled /> 测验达到 {{ completionRequirements.min_quiz_score || 60 }} 分</label>
+              <p v-if="quizSubmitted">当前测验得分：{{ quizScore }}</p>
+              <button type="button" @click="submitQuiz">提交测验</button>
+            </div>
           </section>
         </template>
 
@@ -305,6 +411,12 @@ const sendMessage = async () => {
         </div>
 
         <div ref="chatHistoryRef" class="chat-history">
+          <div class="quick-questions">
+            <button type="button" :disabled="!hasSession() || streamingIndex !== null" @click="askQuickQuestion('用更简单的话解释这一关')">简单解释</button>
+            <button type="button" :disabled="!hasSession() || streamingIndex !== null" @click="askQuickQuestion('给我一个贴近项目的例子')">项目例子</button>
+            <button type="button" :disabled="!hasSession() || streamingIndex !== null" @click="askQuickQuestion('逐行解释本关代码')">逐行讲代码</button>
+            <button type="button" :disabled="!hasSession() || streamingIndex !== null" @click="askQuickQuestion('总结本关常见错误')">常见错误</button>
+          </div>
           <article
             v-for="(msg, index) in chatHistory"
             :key="index"
@@ -333,25 +445,55 @@ const sendMessage = async () => {
     <div v-if="activeDrawer" class="drawer-backdrop" @click="activeDrawer = null">
       <aside class="drawer panel" @click.stop>
         <header>
-          <h2>{{ activeDrawer === 'profile' ? '学习画像' : '引用资料' }}</h2>
+          <h2>{{ activeDrawer === 'profile' ? '学习画像' : activeDrawer === 'references' ? '引用资料' : activeDrawer === 'agent' ? 'Agent 协作过程' : '阶段报告' }}</h2>
           <button type="button" @click="activeDrawer = null">关闭</button>
         </header>
 
         <div v-if="activeDrawer === 'profile'" class="drawer-content">
           <dl>
             <div><dt>姓名</dt><dd>{{ learnerStore.currentLearner?.name || '-' }}</dd></div>
-            <div><dt>背景</dt><dd>{{ learnerStore.currentLearner?.background || '-' }}</dd></div>
             <div><dt>目标</dt><dd>{{ learnerStore.currentLearner?.goal || '-' }}</dd></div>
-            <div><dt>偏好</dt><dd>{{ learnerStore.currentLearner?.preferred_style || '-' }}</dd></div>
-            <div><dt>水平</dt><dd>{{ learnerStore.currentLearner?.current_level || '-' }}</dd></div>
+            <div><dt>Python 基础</dt><dd>{{ learnerStore.currentLearner?.python_level || '-' }}</dd></div>
+            <div><dt>数学基础</dt><dd>{{ learnerStore.currentLearner?.math_level || '-' }}</dd></div>
+            <div><dt>机器学习基础</dt><dd>{{ learnerStore.currentLearner?.ml_level || '-' }}</dd></div>
+            <div><dt>实践偏好</dt><dd>{{ learnerStore.currentLearner?.practice_preference || '-' }}</dd></div>
+            <div><dt>理论偏好</dt><dd>{{ learnerStore.currentLearner?.theory_preference || '-' }}</dd></div>
+            <div><dt>当前困惑</dt><dd>{{ learnerStore.currentLearner?.current_confusion || '-' }}</dd></div>
           </dl>
         </div>
 
-        <div v-else class="drawer-content">
+        <div v-else-if="activeDrawer === 'references'" class="drawer-content">
           <article v-for="cite in currentResources()?.citations || []" :key="cite" class="reference-item">
             {{ cite }}
           </article>
           <p v-if="!currentResources()?.citations?.length">暂无引用资料。</p>
+        </div>
+
+        <div v-else-if="activeDrawer === 'agent'" class="drawer-content timeline">
+          <article v-for="step in currentResources()?.agent_trace?.steps || []" :key="`${step.agent}-${step.title}`">
+            <span>{{ step.status }}</span>
+            <h3>{{ step.agent }}：{{ step.title }}</h3>
+            <p>{{ step.summary }}</p>
+            <ul v-if="step.details?.length">
+              <li v-for="detail in step.details" :key="detail">{{ detail }}</li>
+            </ul>
+          </article>
+          <p v-if="!currentResources()?.agent_trace?.steps?.length">暂无 Agent 过程。</p>
+        </div>
+
+        <div v-else class="drawer-content">
+          <h3>{{ currentResources()?.learning_report?.stage || currentResources()?.current_stage || '阶段报告' }}</h3>
+          <p>{{ currentResources()?.learning_report?.next_recommendation || currentResources()?.recommended_reason || '完成关卡后会生成阶段报告。' }}</p>
+          <h4>已完成节点</h4>
+          <ul>
+            <li v-for="node in currentResources()?.learning_report?.completed_nodes || []" :key="node">{{ node }}</li>
+            <li v-if="!(currentResources()?.learning_report?.completed_nodes || []).length">暂无完成记录</li>
+          </ul>
+          <h4>仍需加强</h4>
+          <ul>
+            <li v-for="point in currentResources()?.learning_report?.weak_points || []" :key="point">{{ point }}</li>
+            <li v-if="!(currentResources()?.learning_report?.weak_points || []).length">暂无明显薄弱点</li>
+          </ul>
         </div>
       </aside>
     </div>
@@ -581,9 +723,107 @@ textarea:focus-visible {
   font-size: 34px;
   letter-spacing: -0.04em;
 }
-.lesson-header span,
-.lesson-status span {
+.recommend-reason {
+  max-width: 720px;
+  margin: 10px 0 0;
   color: var(--muted);
+  line-height: 1.7;
+}
+.mode-badge {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-weight: 800;
+}
+.mode-badge.fallback {
+  color: #b45309;
+  background: #fef3c7;
+}
+.module-card,
+.completion-card,
+.common-errors,
+.expected-output {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px;
+  background: var(--panel);
+}
+.module-card summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+}
+.confirm-row,
+.completion-card label,
+.answer-input {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+  color: var(--text);
+  font-weight: 700;
+}
+.answer-input {
+  align-items: stretch;
+  flex-direction: column;
+}
+.answer-input textarea {
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: var(--panel);
+  font: inherit;
+}
+.common-errors article {
+  margin-top: 12px;
+  border-radius: 14px;
+  padding: 12px;
+  background: var(--primary-soft);
+}
+.common-errors b,
+.common-errors small,
+.expected-output strong {
+  display: block;
+}
+.common-errors p {
+  margin: 6px 0;
+}
+.common-errors small {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.quick-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.quick-questions button {
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.timeline article {
+  padding: 0 0 18px 18px;
+  border-left: 2px solid var(--border);
+}
+.timeline article > span {
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+.timeline h3 {
+  margin: 10px 0 8px;
 }
 .lesson-status {
   min-width: 112px;

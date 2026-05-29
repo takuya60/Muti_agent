@@ -13,25 +13,57 @@ const theme = ref<'light' | 'dark'>('light')
 const formData = reactive({
   name: '',
   goal: '',
-  background: '',
+  pythonLevel: '',
+  mathLevel: '',
+  mlLevel: '',
+  practicePreference: '',
+  theoryPreference: '',
   stylePref: '',
-  targetAlgorithm: '逻辑回归',
-  knownSkills: [] as string[],
-  level: ''
+  targetDirection: 'system_recommended',
+  currentConfusion: ''
 })
 
 const goals = [
-  '零基础入门机器学习',
-  '补全数学/代码短板',
-  '备战算法工程师面试',
+  '系统入门机器学习',
+  '完成一个小项目',
+  '补齐课程/竞赛基础',
+  '理解算法原理',
+  '提升代码实战能力',
   '只是随便看看'
 ]
 
-const backgrounds = [
-  { label: '文科/商科', desc: '无编程经验，适合从案例和直觉开始', value: '文科商科小白' },
-  { label: '理科生', desc: '数学基础较好，需要补代码实操', value: '理科无代码' },
-  { label: '纯开发', desc: '代码熟练，需要补数学和算法理解', value: '纯开发' },
-  { label: 'AI交叉', desc: '已有基础，适合更快推进实训', value: 'AI交叉学科' }
+const pythonLevels = [
+  { label: '几乎没写过 Python', value: 'none', desc: '从语法、变量、循环和函数开始补齐' },
+  { label: '会基础语法', value: 'basic', desc: '能看懂变量、循环、函数，但数据处理不熟' },
+  { label: '会 NumPy/Pandas', value: 'data_basic', desc: '能做基础数组运算和表格处理' },
+  { label: '能独立写脚本', value: 'script', desc: '可以完成较完整的数据处理流程' }
+]
+
+const mathLevels = [
+  { label: '害怕公式', value: 'fear_formula', desc: '希望少推导，多直觉、多例子' },
+  { label: '基础概念可以', value: 'basic', desc: '能理解函数、比例、概率等基础概念' },
+  { label: '学过线代/概率', value: 'college_math', desc: '能接受矩阵、概率和常见指标' },
+  { label: '能接受推导', value: 'derivation', desc: '希望看到更完整的数学逻辑' }
+]
+
+const mlLevels = [
+  { label: '完全没接触', value: 'none', desc: '先建立任务、数据、模型和评估的整体概念' },
+  { label: '看过概念', value: 'concept', desc: '知道一些名词，但没形成实操闭环' },
+  { label: '跑过 sklearn', value: 'sklearn_demo', desc: '能跟着示例训练模型，但不一定理解流程' },
+  { label: '做过小项目', value: 'project', desc: '希望补系统性、调参和复盘能力' }
+]
+
+const practicePrefs = [
+  { label: '先项目实践', value: 'project_first', desc: '先跑通任务，再解释背后的原理' },
+  { label: '理论实践平衡', value: 'balanced', desc: '讲义、代码、测验都保持均衡' },
+  { label: '先理解原理', value: 'theory_first', desc: '先建立概念框架，再进入代码' }
+]
+
+const theoryPrefs = [
+  { label: '尽量少公式', value: 'low_formula' },
+  { label: '多用直觉类比', value: 'intuitive' },
+  { label: '可以接受公式', value: 'formula_ok' },
+  { label: '希望完整推导', value: 'derivation' }
 ]
 
 const stylePrefs = [
@@ -41,41 +73,43 @@ const stylePrefs = [
   { label: '项目挑战', value: '项目挑战' }
 ]
 
-const targetAlgorithms = [
-  { label: '逻辑回归', value: '逻辑回归', desc: '适合入门分类模型，路径完整清晰' },
-  { label: '决策树', value: '决策树', desc: '适合理解规则划分和可解释模型' },
-  { label: '线性回归', value: '线性回归', desc: '适合先理解连续值预测和线性模型' },
-  { label: '无监督学习', value: '无监督学习', desc: '适合探索聚类、降维和数据结构发现' },
-  { label: '深度学习入门', value: '深度学习入门', desc: '适合了解神经网络和 Keras 快速实验' }
+const targetDirections = [
+  { label: '由系统推荐', value: 'system_recommended', desc: '先诊断画像，再推荐起点和分支' },
+  { label: '先打共同基础', value: 'common_foundation', desc: '补齐 Python、数据处理和 sklearn 流程' },
+  { label: '分类预测', value: 'classification', desc: '学习逻辑回归、树模型和分类指标' },
+  { label: '连续值预测', value: 'regression', desc: '学习线性回归、误差指标和回归任务' },
+  { label: '模型解释与集成', value: 'model_explanation', desc: '学习决策树、随机森林和特征重要性' },
+  { label: '无监督探索', value: 'unsupervised', desc: '学习 PCA、KMeans、DBSCAN 和聚类评估' },
+  { label: '深度学习入门', value: 'deep_learning_intro', desc: '学习神经网络、Keras 和早停正则化' }
 ]
 
-const skillsList = [
-  'Python基础', 'Numpy/Pandas', '微积分', '线性代数', '概率论', '逻辑回归', '深度学习'
-]
-
-const levels = [
-  { label: '零基础小白', value: 'beginner' },
-  { label: '略知皮毛', value: 'beginner_plus' },
-  { label: '中等熟手', value: 'intermediate' },
-  { label: '硬核极客', value: 'advanced' }
+const confusions = [
+  '不知道从哪里开始',
+  '看得懂教程但不会写代码',
+  '公式看不懂',
+  '不知道模型指标是什么意思',
+  '学了很多但串不起来'
 ]
 
 const stepTitle = computed(() => {
-  if (currentStep.value === 1) return '基础目标'
-  if (currentStep.value === 2) return '背景与偏好'
-  return '知识锚点'
+  if (currentStep.value === 1) return '学习目标'
+  if (currentStep.value === 2) return '基础诊断'
+  if (currentStep.value === 3) return '学习偏好'
+  return '方向与困惑'
 })
 
 const stepDescription = computed(() => {
-  if (currentStep.value === 1) return '先明确你希望完成的学习目标，系统会把目标拆成可推进的路径。'
-  if (currentStep.value === 2) return '学习背景和偏好会影响讲义的解释方式、代码粒度和题目难度。'
-  return '已掌握知识会决定你从哪一关开始，而不是所有人都从同一页开始。'
+  if (currentStep.value === 1) return '先明确你的学习目的，系统会据此生成阶段任务和最终报告。'
+  if (currentStep.value === 2) return '不要预设用户都有 Python 基础，系统会根据真实基础决定学习起点。'
+  if (currentStep.value === 3) return '偏实践还是偏理论，会影响讲义结构、代码解释粒度和测验难度。'
+  return '你可以指定方向，也可以让系统根据画像推荐共同基础或分支路线。'
 })
 
 const canContinue = computed(() => {
   if (currentStep.value === 1) return Boolean(formData.name.trim() && formData.goal)
-  if (currentStep.value === 2) return Boolean(formData.targetAlgorithm && formData.background && formData.stylePref)
-  return Boolean(formData.level)
+  if (currentStep.value === 2) return Boolean(formData.pythonLevel && formData.mathLevel && formData.mlLevel)
+  if (currentStep.value === 3) return Boolean(formData.practicePreference && formData.theoryPreference && formData.stylePref)
+  return Boolean(formData.targetDirection)
 })
 
 onMounted(() => {
@@ -94,7 +128,7 @@ const nextStep = () => {
     errorMessage.value = '请先完成当前步骤的必填项。'
     return
   }
-  currentStep.value = Math.min(3, currentStep.value + 1)
+  currentStep.value = Math.min(4, currentStep.value + 1)
 }
 
 const prevStep = () => {
@@ -103,54 +137,88 @@ const prevStep = () => {
 }
 
 const buildTestScores = () => {
-  const baseScores: Record<string, number> = {
-    beginner: 35,
-    beginner_plus: 55,
-    intermediate: 75,
-    advanced: 90
-  }
-  const base = baseScores[formData.level] ?? 55
-  const hasPython = formData.knownSkills.includes('Python基础') || formData.knownSkills.includes('Numpy/Pandas')
-  const hasMath = formData.knownSkills.includes('线性代数') || formData.knownSkills.includes('微积分') || formData.knownSkills.includes('概率论')
-  const hasMl = formData.knownSkills.includes('逻辑回归') || formData.knownSkills.includes('深度学习')
+  const pythonScores: Record<string, number> = { none: 25, basic: 50, data_basic: 75, script: 88 }
+  const mathScores: Record<string, number> = { fear_formula: 35, basic: 58, college_math: 78, derivation: 90 }
+  const mlScores: Record<string, number> = { none: 25, concept: 52, sklearn_demo: 76, project: 88 }
 
   return {
-    python: Math.min(100, base + (hasPython ? 12 : -8)),
-    linear_algebra: Math.min(100, base + (hasMath ? 10 : -10)),
-    ml_basic: Math.min(100, base + (hasMl ? 12 : -10)),
-    model_evaluation: Math.min(100, base + (hasMl ? 5 : -12))
+    python: pythonScores[formData.pythonLevel] ?? 50,
+    linear_algebra: mathScores[formData.mathLevel] ?? 58,
+    ml_basic: mlScores[formData.mlLevel] ?? 52,
+    model_evaluation: formData.mlLevel === 'project' ? 78 : formData.mlLevel === 'sklearn_demo' ? 66 : 42
   }
+}
+
+const inferCurrentLevel = () => {
+  if (formData.pythonLevel === 'script' && formData.mathLevel === 'derivation' && ['sklearn_demo', 'project'].includes(formData.mlLevel)) return 'advanced'
+  if (['data_basic', 'script'].includes(formData.pythonLevel) && ['concept', 'sklearn_demo', 'project'].includes(formData.mlLevel)) return 'intermediate'
+  return 'beginner_plus'
+}
+
+const directionToAlgorithm = () => {
+  const map: Record<string, string> = {
+    system_recommended: '由系统推荐',
+    common_foundation: '共同基础',
+    classification: '分类预测',
+    regression: '连续值预测',
+    model_explanation: '模型解释与集成',
+    unsupervised: '无监督学习',
+    deep_learning_intro: '深度学习入门'
+  }
+  return map[formData.targetDirection] || '由系统推荐'
+}
+
+const buildKnownSkills = () => {
+  const skills: string[] = []
+  if (['basic', 'data_basic', 'script'].includes(formData.pythonLevel)) skills.push('Python基础')
+  if (['data_basic', 'script'].includes(formData.pythonLevel)) skills.push('Numpy/Pandas')
+  if (['college_math', 'derivation'].includes(formData.mathLevel)) skills.push('线性代数', '概率论')
+  if (['sklearn_demo', 'project'].includes(formData.mlLevel)) skills.push('逻辑回归')
+  if (formData.targetDirection === 'deep_learning_intro') skills.push('深度学习')
+  return Array.from(new Set(skills))
 }
 
 const handleStart = async () => {
   errorMessage.value = ''
   if (!canContinue.value) {
-    errorMessage.value = '请选择您的综合水平。'
+    errorMessage.value = '请选择目标方向。'
     return
   }
 
   isBuilding.value = true
 
   try {
+    const knownSkills = buildKnownSkills()
     await learnerStore.login({
       learner_id: `user_${Date.now()}`,
       name: formData.name.trim(),
       goal: formData.goal,
-      background: formData.background,
+      background: `Python=${formData.pythonLevel}；数学=${formData.mathLevel}；机器学习=${formData.mlLevel}`,
       preferred_style: formData.stylePref,
-      target_algorithm: formData.targetAlgorithm,
+      target_algorithm: directionToAlgorithm(),
+      target_direction: formData.targetDirection,
+      python_level: formData.pythonLevel,
+      math_level: formData.mathLevel,
+      ml_level: formData.mlLevel,
+      practice_preference: formData.practicePreference,
+      theory_preference: formData.theoryPreference,
+      current_confusion: formData.currentConfusion,
       test_scores: buildTestScores(),
-      current_level: formData.level,
-      known_skills: formData.knownSkills,
+      current_level: inferCurrentLevel(),
+      known_skills: knownSkills,
       bloom_taxonomy: {},
-      learning_style_model: { preference: formData.stylePref },
+      learning_style_model: {
+        preference: formData.stylePref,
+        practice_preference: formData.practicePreference,
+        theory_preference: formData.theoryPreference
+      },
       attention_span_minutes: 30,
-      frustration_index: 0.0,
+      frustration_index: formData.currentConfusion ? 0.25 : 0.0,
       engagement_score: 1.0,
-      knowledge_mastery: Object.fromEntries(formData.knownSkills.map(s => [s, 0.8]))
+      knowledge_mastery: Object.fromEntries(knownSkills.map(s => [s, 0.8]))
     })
 
-    router.push('/learning')
+    router.push('/dashboard')
   } catch (e) {
     errorMessage.value = '画像生成失败，请检查后端服务后重试。'
     isBuilding.value = false
@@ -165,7 +233,7 @@ const handleStart = async () => {
         <span class="brand-mark">AE</span>
         <div>
           <strong>AgentEdu</strong>
-          <small>个性化机器学习实训</small>
+          <small>多 Agent 个性化实训平台</small>
         </div>
       </div>
       <button class="theme-button" type="button" @click="toggleTheme">
@@ -175,42 +243,42 @@ const handleStart = async () => {
 
     <section class="layout">
       <aside class="intro-panel">
-        <p class="section-kicker">学习路径生成器</p>
-        <h1>先诊断<br>再规划<br>再逐关学习</h1>
+        <p class="section-kicker">学习画像诊断</p>
+        <h1>先识别基础，再生成路径。</h1>
         <p class="intro-copy">
-          系统会根据你的背景、目标和知识锚点，生成一条通向目标算法的实训路径。每次只解锁当前最合适的一关，并由右侧导师持续陪练。
+          系统不会假设你已经会 Python。多 Agent 会根据你的编程基础、数学基础、机器学习基础和偏好，决定从共同基础还是分支任务开始。
         </p>
 
         <div class="preview-card">
           <div class="preview-header">
-            <span>路径预览</span>
-            <strong>示例</strong>
+            <span>闭环流程</span>
+            <strong>AgentEdu</strong>
           </div>
           <ol>
-            <li>建立学习画像</li>
-            <li>识别当前薄弱点</li>
-            <li>解锁当前关卡讲义</li>
-            <li>实操代码与导师答疑</li>
+            <li>画像诊断：识别 Python / 数学 / ML 基础</li>
+            <li>路径规划：共同基础 + 多分支路线</li>
+            <li>资源生成：讲义、代码、测验和常见错误</li>
+            <li>反馈迭代：报告、掌握度和下一关推荐</li>
           </ol>
         </div>
       </aside>
 
       <section class="form-card" aria-label="学习画像表单">
         <div class="stepper" aria-label="填写进度">
-          <span v-for="step in 3" :key="step" :class="['step-item', { active: step === currentStep, done: step < currentStep }]">
+          <span v-for="step in 4" :key="step" :class="['step-item', { active: step === currentStep, done: step < currentStep }]">
             {{ step }}
           </span>
         </div>
 
         <div v-if="isBuilding" class="loading-state" aria-live="polite">
           <div class="spinner"></div>
-          <h2>正在生成学习画像</h2>
-          <p>正在分析目标、背景和知识锚点...</p>
+          <h2>正在建立学习画像</h2>
+          <p>正在保存你的基础诊断和学习偏好...</p>
         </div>
 
         <template v-else>
           <div class="form-title">
-            <span>Step {{ currentStep }} / 3</span>
+            <span>Step {{ currentStep }} / 4</span>
             <h2>{{ stepTitle }}</h2>
             <p>{{ stepDescription }}</p>
           </div>
@@ -219,10 +287,10 @@ const handleStart = async () => {
 
           <div v-show="currentStep === 1" class="form-step">
             <label class="field-label" for="learner-name">你的称呼</label>
-            <input id="learner-name" v-model="formData.name" class="text-field" type="text" />
+            <input id="learner-name" v-model="formData.name" class="text-field" type="text" placeholder="例如：博丽灵梦" />
 
-            <label class="field-label">核心目标</label>
-            <div class="choice-grid">
+            <label class="field-label">学习目标</label>
+            <div class="choice-grid two-col">
               <button
                 v-for="goal in goals"
                 :key="goal"
@@ -236,35 +304,78 @@ const handleStart = async () => {
           </div>
 
           <div v-show="currentStep === 2" class="form-step">
-            <label class="field-label">阶段目标</label>
+            <label class="field-label">Python 编程基础</label>
             <div class="choice-grid two-col">
               <button
-                v-for="algorithm in targetAlgorithms"
-                :key="algorithm.value"
+                v-for="item in pythonLevels"
+                :key="item.value"
                 type="button"
-                :class="['choice-card tall', { selected: formData.targetAlgorithm === algorithm.value }]"
-                @click="formData.targetAlgorithm = algorithm.value"
+                :class="['choice-card tall', { selected: formData.pythonLevel === item.value }]"
+                @click="formData.pythonLevel = item.value"
               >
-                <strong>{{ algorithm.label }}</strong>
-                <span>{{ algorithm.desc }}</span>
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.desc }}</span>
               </button>
             </div>
 
-            <label class="field-label">学习背景</label>
+            <label class="field-label">数学基础</label>
             <div class="choice-grid two-col">
               <button
-                v-for="background in backgrounds"
-                :key="background.value"
+                v-for="item in mathLevels"
+                :key="item.value"
                 type="button"
-                :class="['choice-card tall', { selected: formData.background === background.value }]"
-                @click="formData.background = background.value"
+                :class="['choice-card tall', { selected: formData.mathLevel === item.value }]"
+                @click="formData.mathLevel = item.value"
               >
-                <strong>{{ background.label }}</strong>
-                <span>{{ background.desc }}</span>
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.desc }}</span>
               </button>
             </div>
 
-            <label class="field-label">偏好风格</label>
+            <label class="field-label">机器学习基础</label>
+            <div class="choice-grid two-col">
+              <button
+                v-for="item in mlLevels"
+                :key="item.value"
+                type="button"
+                :class="['choice-card tall', { selected: formData.mlLevel === item.value }]"
+                @click="formData.mlLevel = item.value"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.desc }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div v-show="currentStep === 3" class="form-step">
+            <label class="field-label">实践 / 理论节奏</label>
+            <div class="choice-grid two-col">
+              <button
+                v-for="item in practicePrefs"
+                :key="item.value"
+                type="button"
+                :class="['choice-card tall', { selected: formData.practicePreference === item.value }]"
+                @click="formData.practicePreference = item.value"
+              >
+                <strong>{{ item.label }}</strong>
+                <span>{{ item.desc }}</span>
+              </button>
+            </div>
+
+            <label class="field-label">理论深度</label>
+            <div class="chip-row">
+              <button
+                v-for="item in theoryPrefs"
+                :key="item.value"
+                type="button"
+                :class="['chip-button', { selected: formData.theoryPreference === item.value }]"
+                @click="formData.theoryPreference = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+
+            <label class="field-label">解释风格</label>
             <div class="chip-row">
               <button
                 v-for="style in stylePrefs"
@@ -278,33 +389,39 @@ const handleStart = async () => {
             </div>
           </div>
 
-          <div v-show="currentStep === 3" class="form-step">
-            <label class="field-label">你已经接触过的知识</label>
-            <div class="chip-row wrap">
-              <label v-for="skill in skillsList" :key="skill" :class="['check-chip', { selected: formData.knownSkills.includes(skill) }]">
-                <input v-model="formData.knownSkills" type="checkbox" :value="skill" />
-                {{ skill }}
-              </label>
+          <div v-show="currentStep === 4" class="form-step">
+            <label class="field-label">目标方向</label>
+            <div class="choice-grid two-col">
+              <button
+                v-for="direction in targetDirections"
+                :key="direction.value"
+                type="button"
+                :class="['choice-card tall', { selected: formData.targetDirection === direction.value }]"
+                @click="formData.targetDirection = direction.value"
+              >
+                <strong>{{ direction.label }}</strong>
+                <span>{{ direction.desc }}</span>
+              </button>
             </div>
 
-            <label class="field-label">综合水平</label>
-            <div class="choice-grid level-grid">
+            <label class="field-label">当前最困惑的问题，可选</label>
+            <div class="chip-row wrap">
               <button
-                v-for="level in levels"
-                :key="level.value"
+                v-for="confusion in confusions"
+                :key="confusion"
                 type="button"
-                :class="['choice-card', { selected: formData.level === level.value }]"
-                @click="formData.level = level.value"
+                :class="['chip-button', { selected: formData.currentConfusion === confusion }]"
+                @click="formData.currentConfusion = formData.currentConfusion === confusion ? '' : confusion"
               >
-                {{ level.label }}
+                {{ confusion }}
               </button>
             </div>
           </div>
 
           <footer class="form-actions">
             <button type="button" class="secondary-button" :disabled="currentStep === 1" @click="prevStep">上一步</button>
-            <button v-if="currentStep < 3" type="button" class="primary-button" @click="nextStep">下一步</button>
-            <button v-else type="button" class="primary-button" @click="handleStart">生成画像并开始</button>
+            <button v-if="currentStep < 4" type="button" class="primary-button" @click="nextStep">下一步</button>
+            <button v-else type="button" class="primary-button" @click="handleStart">生成画像并进入学习首页</button>
           </footer>
         </template>
       </section>
@@ -320,11 +437,11 @@ const handleStart = async () => {
 
 .onboarding-page {
   --bg: #f6f8fb;
-  --surface: rgba(255, 255, 255, 0.86);
+  --surface: rgba(255, 255, 255, 0.88);
   --surface-solid: #ffffff;
   --text: #0f172a;
   --muted: #64748b;
-  --border: rgba(148, 163, 184, 0.26);
+  --border: rgba(148, 163, 184, 0.28);
   --primary: #4f46e5;
   --primary-soft: #eef2ff;
   --success: #16a34a;
@@ -339,7 +456,7 @@ const handleStart = async () => {
 
 .onboarding-page[data-theme='dark'] {
   --bg: #111827;
-  --surface: rgba(17, 24, 39, 0.84);
+  --surface: rgba(17, 24, 39, 0.86);
   --surface-solid: #1f2937;
   --text: #f8fafc;
   --muted: #cbd5e1;
@@ -389,8 +506,7 @@ const handleStart = async () => {
 .primary-button,
 .secondary-button,
 .choice-card,
-.chip-button,
-.check-chip {
+.chip-button {
   min-height: 44px;
   cursor: pointer;
   transition: background 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
@@ -409,7 +525,7 @@ const handleStart = async () => {
   margin: 34px auto 0;
   padding: 0 20px 40px;
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 540px);
+  grid-template-columns: minmax(0, 0.82fr) minmax(460px, 580px);
   gap: 28px;
 }
 
@@ -465,7 +581,7 @@ const handleStart = async () => {
 }
 
 .form-card {
-  min-height: 640px;
+  min-height: 720px;
   display: flex;
   flex-direction: column;
   border-radius: 28px;
@@ -536,7 +652,6 @@ const handleStart = async () => {
 .theme-button:focus-visible,
 .choice-card:focus-visible,
 .chip-button:focus-visible,
-.check-chip:focus-within,
 .primary-button:focus-visible,
 .secondary-button:focus-visible {
   outline: 3px solid rgba(79, 70, 229, 0.22);
@@ -557,14 +672,12 @@ const handleStart = async () => {
 }
 .choice-card:hover,
 .chip-button:hover,
-.check-chip:hover,
 .theme-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 .choice-card.selected,
-.chip-button.selected,
-.check-chip.selected {
+.chip-button.selected {
   border-color: var(--primary);
   background: var(--primary-soft);
   box-shadow: 0 10px 26px rgba(79, 70, 229, 0.12);
@@ -586,8 +699,7 @@ const handleStart = async () => {
   flex-wrap: wrap;
   gap: 10px;
 }
-.chip-button,
-.check-chip {
+.chip-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -596,11 +708,6 @@ const handleStart = async () => {
   padding: 0 14px;
   color: var(--text);
   background: var(--surface-solid);
-}
-.check-chip input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
 }
 .form-actions {
   margin-top: auto;
@@ -648,7 +755,7 @@ const handleStart = async () => {
   to { transform: rotate(360deg); }
 }
 
-@media (max-width: 920px) {
+@media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;
   }
@@ -664,8 +771,7 @@ const handleStart = async () => {
     flex-direction: column;
   }
   .choice-grid,
-  .choice-grid.two-col,
-  .level-grid {
+  .choice-grid.two-col {
     grid-template-columns: 1fr;
   }
 }

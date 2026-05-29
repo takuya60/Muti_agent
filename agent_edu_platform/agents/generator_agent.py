@@ -1,11 +1,11 @@
 import json
-import re
 import logging
 from typing import Optional
 from openai import OpenAI
 from backend.config import settings
 from schemas.agent_state_schema import WorkflowState
-from schemas.resource_schema import CodeStep, GeneratedResources, QuizItem
+from schemas.resource_schema import CodeStep, CommonError, GeneratedResources, LessonModule, QuizItem
+from agents.path_planner import build_learning_plan
 
 logger = logging.getLogger(__name__)
 
@@ -145,24 +145,8 @@ def run_generator_agent(state: WorkflowState) -> WorkflowState:
         if not any("对齐知识点" in step for step in resources.learning_path):
             resources.learning_path.insert(1, f"对齐知识点：{', '.join(dict.fromkeys(evidence_points[:4]))}")
 
-    resources.final_target = state.target_algorithm
-    if not resources.learning_path_nodes:
-        resources.learning_path_nodes = _build_learning_path(ALGO_NAME_MAP.get(state.target_algorithm, state.target_algorithm))
-    resources.total_steps = max(1, len(resources.learning_path))
-    if not resources.current_focus:
-        resources.current_focus = resources.learning_path[0] if resources.learning_path else state.target_algorithm
-    if not resources.current_focus_id and resources.current_focus in resources.learning_path:
-        idx = resources.learning_path.index(resources.current_focus)
-        if idx < len(resources.learning_path_nodes):
-            resources.current_focus_id = resources.learning_path_nodes[idx]
-    if resources.current_focus in resources.learning_path:
-        resources.current_step_index = resources.learning_path.index(resources.current_focus) + 1
-    else:
-        resources.current_step_index = 1
-    if resources.current_step_index < len(resources.learning_path):
-        resources.next_focus = resources.learning_path[resources.current_step_index]
-    else:
-        resources.next_focus = ""
+    resources.final_target = resources.final_target or state.target_algorithm
+    _enrich_resources(resources, state, level)
 
     state.generated_resources = resources.model_dump()
     state.agent_events.append({
@@ -186,28 +170,27 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
 
     client = OpenAI(api_key=api_key, base_url=base_url)
     
-    # 结合知识图谱规划路径 — 用映射后的英文 node id
+    # 结合知识图谱和学习者画像规划“共同基础 + 分支”路径
     kg = KnowledgeGraphManager()
     learner = state.learner_profile
     profile_level = learner.get("current_level", level)
-    mastered = _infer_mastered_nodes(learner, profile_level)
-    target_algo = state.target_algorithm
-    target_node = ALGO_NAME_MAP.get(target_algo, target_algo)
-    
-    logger.info(f"知识图谱查询: target_algo='{target_algo}' -> target_node='{target_node}'")
-    
-    current_focus = _recommend_current_node(target_node, mastered)
-    full_path = _build_learning_path(target_node)
-    if current_focus not in full_path:
-        full_path.insert(0, current_focus)
+    plan = build_learning_plan(learner, state.target_algorithm, kg)
+    target_algo = plan.final_target
 
-    current_focus_name = kg.nodes_meta.get(current_focus, {}).get("name", current_focus)
-    path_names = [kg.nodes_meta.get(n, {}).get("name", n) for n in full_path]
-    current_step_index = full_path.index(current_focus) + 1 if current_focus in full_path else 1
-    total_steps = max(1, len(full_path))
-    next_focus_name = ""
-    if current_step_index < len(path_names):
-        next_focus_name = path_names[current_step_index]
+    logger.info(
+        "路径规划: direction='%s', current='%s', total=%s",
+        plan.direction,
+        plan.current_node,
+        plan.total_steps,
+    )
+
+    current_focus = plan.current_node
+    full_path = plan.full_path
+    current_focus_name = plan.current_name
+    path_names = plan.path_names
+    current_step_index = plan.current_step_index
+    total_steps = plan.total_steps
+    next_focus_name = plan.next_name
 
     learner = state.learner_profile
     background = learner.get("background", "未提供")
@@ -218,63 +201,67 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
     test_scores = learner.get("test_scores", {})
     attention_span = learner.get("attention_span_minutes", 30)
 
-    system_prompt = "你是一个经验丰富的机器学习讲师。你的任务是根据学习者画像、诊断结果、知识图谱路径和检索证据，生成JSON格式的个性化实训资源。"
+    system_prompt = "你是一个经验丰富的机器学习讲师。你的任务是根据学习者画像、诊断结果、知识图谱路径和检索证据，只生成 Markdown 格式的个性化讲义正文。不要输出 JSON。"
 
     user_prompt = f"""
-    最终学习目标: {target_algo}
-    当前关卡: {current_focus_name}
-    学习进度: 第 {current_step_index} / {total_steps} 关
-    下一关预告: {next_focus_name or '暂无，当前已接近终点'}
-    完整学习路径: {' -> '.join(path_names)}
+请只生成 Markdown 讲义正文，不要返回 JSON，不要使用 Markdown 代码围栏包裹全文。
 
-    【学习者画像】
-    背景: {background}
-    学习目标: {goal}
-    偏好风格: {preferred_style}
-    已知技能: {', '.join(known_skills) if known_skills else '暂无'}
-    薄弱点: {', '.join(weak_points) if weak_points else '暂无明显薄弱点'}
-    测评分数: {json.dumps(test_scores, ensure_ascii=False)}
-    推荐级别: {level}
-    单次专注时长: {attention_span} 分钟
+# 生成背景
 
-    参考资料: {', '.join(evidence_titles) if evidence_titles else '无'}
-    参考知识点: {', '.join(dict.fromkeys(evidence_points)) if evidence_points else '无'}
+- 最终学习目标：{target_algo}
+- 当前关卡：{current_focus_name}
+- 学习进度：第 {current_step_index} / {total_steps} 关
+- 下一关预告：{next_focus_name or '暂无，当前已接近终点'}
+- 完整学习路径：{' -> '.join(path_names)}
+- 推荐原因：{plan.recommended_reason}
 
-    请围绕【{current_focus_name}】生成一份完整但不冗长的个性化实训讲义。要求：
-    1. 必须明显体现学习者画像差异，不要写成通用模板。
-    2. 如果学习者偏基础，要多用类比和分步解释；如果学习者偏进阶，要增加原理、指标和工程注意点。
-    3. 如果用户偏好图解类比/案例驱动/公式推导/项目挑战，讲义语气和例子要对应变化。
-    4. theory_note 至少 500 字，不能只写几句话。
-    5. practice_guide 至少 3 步，每步代码和解释要与当前学习者水平匹配。
-    6. graded_quiz 必须包含基础、标准、进阶三题，题目不能互相重复。
-    7. 即使当前焦点是前置知识点，也必须覆盖训练集、测试集、标准化、模型训练、准确率和混淆矩阵这 6 个实操闭环要素。
+# 学习者画像
 
-    严格按照以下JSON结构返回：
-    {{
-        "title": "{current_focus_name} 个性化实训讲义",
-        "learner_level": "{level}",
-        "theory_note": "...",
-        "dataset_instruction": "...",
-        "practice_guide": [
-            {{ "step_name": "...", "python_code": "...", "explanation": "..." }}
-        ],
-        "graded_quiz": [
-            {{ "level": "基础", "question": "...", "answer": "...", "explanation": "..." }},
-            {{ "level": "标准", "question": "...", "answer": "...", "explanation": "..." }},
-            {{ "level": "进阶", "question": "...", "answer": "...", "explanation": "..." }}
-        ],
-        "learning_path": {json.dumps(path_names, ensure_ascii=False)},
-        "learning_path_nodes": {json.dumps(full_path, ensure_ascii=False)},
-        "citations": {json.dumps(evidence_titles, ensure_ascii=False)},
-        "final_target": "{target_algo}",
-        "current_focus": "{current_focus_name}",
-        "current_focus_id": "{current_focus}",
-        "current_step_index": {current_step_index},
-        "total_steps": {total_steps},
-        "next_focus": "{next_focus_name}"
-    }}
-    注意：只返回合法的JSON，不要有Markdown格式标记（如```json），确保能被JSON.loads解析。
-    """
+- 背景：{background}
+- 学习目标：{goal}
+- 偏好风格：{preferred_style}
+- 已知技能：{', '.join(known_skills) if known_skills else '暂无'}
+- 薄弱点：{', '.join(weak_points) if weak_points else '暂无明显薄弱点'}
+- 测评分数：{json.dumps(test_scores, ensure_ascii=False)}
+- 推荐级别：{level}
+- 单次专注时长：{attention_span} 分钟
+
+# 参考资料
+
+- 资料来源：{', '.join(evidence_titles) if evidence_titles else '无'}
+- 参考知识点：{', '.join(dict.fromkeys(evidence_points)) if evidence_points else '无'}
+
+# 讲义要求
+
+请围绕“{current_focus_name}”生成 1000 到 1500 字的个性化讲义，必须包含以下 Markdown 小节：
+
+## 为什么学这一关
+说明这一关在当前学习路径里的位置，以及它如何服务最终目标。
+
+## 核心概念
+用适合该学习者基础的方式解释当前知识点。
+
+## 直觉类比
+如果学习者偏基础或数学较弱，多用生活化类比；如果学习者基础较强，可以更精炼。
+
+## 必要原理
+根据学习者的数学基础决定公式深度。数学弱则少公式，数学强则可以加入必要公式。
+
+## 项目实操中的作用
+结合一个小型机器学习项目解释这个知识点如何影响后续数据处理、模型训练或评估。
+
+## 常见误区
+列出 3 个初学者容易犯的错误，并说明如何避免。
+
+## 本关小结
+用 3 到 5 条要点总结用户学完后应该掌握什么。
+
+要求：
+1. 必须明显体现学习者画像差异，不要写成通用模板。
+2. 可以使用 Markdown 标题、列表、表格、公式。
+3. 不要生成代码练习和测验，它们由后端结构化生成。
+4. 不要输出 JSON。
+"""
     
     try:
         response = client.chat.completions.create(
@@ -284,29 +271,20 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
-            timeout=30.0
+            timeout=90.0
         )
-        content = response.choices[0].message.content.strip()
-        
-        # 兼容 ```json fenced block
-        fenced_match = re.search(r'```(?:json)?\s*\n?(.*?)```', content, re.DOTALL)
-        if fenced_match:
-            content = fenced_match.group(1).strip()
-        
-        data = json.loads(content)
-        result = GeneratedResources(**data)
-        logger.info(f"LLM 生成成功: {result.title}")
+        theory_note = response.choices[0].message.content.strip()
+        if not theory_note:
+            raise ValueError("LLM 返回空讲义")
+
+        result = _build_resources_from_markdown(
+            theory_note=theory_note,
+            level=level,
+            plan=plan,
+            evidence_titles=evidence_titles,
+        )
+        logger.info(f"LLM Markdown 讲义生成成功: {result.title}")
         return result
-    except json.JSONDecodeError as e:
-        error_msg = f"JSON 解析失败: {e}. 原始内容前500字: {content[:500]}"
-        _llm_generation._last_error = error_msg
-        logger.error(error_msg)
-        state.agent_events.append({
-            "agent": "资源生成 Agent",
-            "status": "llm_json_parse_error",
-            "summary": error_msg,
-        })
-        return None
     except Exception as e:
         error_msg = f"LLM 调用异常: {type(e).__name__}: {e}"
         _llm_generation._last_error = error_msg
@@ -317,6 +295,214 @@ def _llm_generation(state: WorkflowState, level: str, evidence_titles: list, evi
             "summary": error_msg,
         })
         return None
+
+
+def _build_resources_from_markdown(
+    *,
+    theory_note: str,
+    level: str,
+    plan,
+    evidence_titles: list[str],
+) -> GeneratedResources:
+    return GeneratedResources(
+        title=f"{plan.current_name} 个性化实训讲义",
+        learner_level=level,
+        theory_note=theory_note,
+        dataset_instruction=_dataset_instruction_for(plan.current_name),
+        practice_guide=[CodeStep(**step) for step in _default_practice_guide(plan.current_name)],
+        graded_quiz=[QuizItem(**item) for item in _default_quiz(plan.current_name)],
+        learning_path=plan.path_names,
+        learning_path_nodes=plan.full_path,
+        citations=evidence_titles,
+        final_target=plan.final_target,
+        current_focus=plan.current_name,
+        current_focus_id=plan.current_node,
+        current_step_index=plan.current_step_index,
+        total_steps=plan.total_steps,
+        next_focus=plan.next_name,
+        current_stage=plan.current_stage,
+        current_branch=plan.current_branch,
+        recommended_reason=plan.recommended_reason,
+    )
+
+
+def _dataset_instruction_for(focus_name: str) -> str:
+    return (
+        f"本关围绕 **{focus_name}** 设计一个小型表格数据实训。"
+        "你可以使用任意包含特征列和目标列的 CSV 数据，先观察字段含义和缺失情况，"
+        "再完成训练/测试划分、必要预处理、基线模型训练和指标评估。"
+        "重点不是追求高分，而是理解当前知识点在完整机器学习流程中的位置。"
+    )
+
+
+def _default_practice_guide(focus_name: str) -> list[dict[str, str]]:
+    return [
+        {
+            "step_name": "读取数据并查看结构",
+            "python_code": "import pandas as pd\n\ndf = pd.read_csv('data.csv')\nprint(df.head())\nprint(df.info())",
+            "explanation": f"先看清数据列、缺失值和类型，再讨论 {focus_name} 如何影响建模。",
+        },
+        {
+            "step_name": "划分训练集和测试集",
+            "python_code": "from sklearn.model_selection import train_test_split\n\nX = df.drop(columns=['target'])\ny = df['target']\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)",
+            "explanation": "先划分数据可以减少数据泄露，让测试集更接近真实未知样本。",
+        },
+        {
+            "step_name": "训练并评估基线模型",
+            "python_code": "from sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import accuracy_score\n\npipe = Pipeline([('scaler', StandardScaler()), ('model', LogisticRegression(max_iter=1000))])\npipe.fit(X_train, y_train)\nprint(accuracy_score(y_test, pipe.predict(X_test)))",
+            "explanation": "用 Pipeline 串联预处理和模型训练，便于后续替换模型或加入交叉验证。",
+        },
+    ]
+
+
+def _default_quiz(focus_name: str) -> list[dict[str, str]]:
+    return [
+        {"level": "基础", "question": f"{focus_name} 主要解决什么问题？", "answer": "解释当前知识点在数据、模型或评估流程中的作用。", "explanation": "先把作用讲清楚，比机械记代码更重要。"},
+        {"level": "标准", "question": f"如果忽略 {focus_name}，模型训练可能出现什么问题？", "answer": "可能导致训练流程不完整、评估失真或模型泛化变差。", "explanation": "机器学习流程中的每一步都会影响最终评估可信度。"},
+        {"level": "进阶", "question": f"如何在一个小项目中验证 {focus_name} 的效果？", "answer": "可以设置对照实验，比较处理前后的验证集指标和错误类型。", "explanation": "通过实验比较，而不是只凭直觉判断改动是否有效。"},
+    ]
+
+
+def _enrich_resources(resources: GeneratedResources, state: WorkflowState, level: str) -> None:
+    kg = KnowledgeGraphManager()
+    plan = build_learning_plan(state.learner_profile, state.target_algorithm, kg)
+
+    resources.final_target = plan.final_target
+    resources.learning_path = plan.path_names
+    resources.learning_path_nodes = plan.full_path
+    resources.current_focus = plan.current_name
+    resources.current_focus_id = plan.current_node
+    resources.current_step_index = plan.current_step_index
+    resources.total_steps = plan.total_steps
+    resources.next_focus = plan.next_name
+    resources.current_stage = plan.current_stage
+    resources.current_branch = plan.current_branch
+    resources.recommended_reason = plan.recommended_reason
+    resources.available_branches = plan.available_branches
+
+    if not resources.lesson_modules:
+        resources.lesson_modules = _build_lesson_modules(resources)
+    if not resources.common_errors:
+        resources.common_errors = _build_common_errors(plan.current_node)
+    for step in resources.practice_guide:
+        if not step.common_errors:
+            step.common_errors = _build_code_common_errors()
+    resources.agent_trace.steps = [
+        {
+            "agent": "画像诊断 Agent",
+            "title": "分析学习基础",
+            "status": "completed",
+            "summary": state.agent_events[0].get("summary", "完成学习者画像诊断") if state.agent_events else "完成学习者画像诊断",
+            "details": state.diagnosis.weak_points if state.diagnosis else [],
+        },
+        {
+            "agent": "路径规划 Agent",
+            "title": "匹配知识图谱路径",
+            "status": "completed",
+            "summary": plan.recommended_reason,
+            "details": [f"当前阶段：{plan.current_stage}", f"当前分支：{plan.current_branch}", f"下一关：{plan.next_name or '暂无'}"],
+        },
+        {
+            "agent": "知识检索 Agent",
+            "title": "查找知识库资料",
+            "status": "completed",
+            "summary": f"检索到 {len(state.retrieved_knowledge)} 条知识库证据",
+            "details": [item.title for item in state.retrieved_knowledge[:6]],
+        },
+        {
+            "agent": "资源生成 Agent",
+            "title": "生成讲义、代码和测验",
+            "status": resources.generation_mode,
+            "summary": f"生成模式：{resources.generation_mode}，难度：{level}",
+            "details": [resources.title],
+        },
+        {
+            "agent": "审核纠偏 Agent",
+            "title": "检查内容质量",
+            "status": "completed" if state.review_passed else "needs_review",
+            "summary": state.reviewer_feedback or "等待审核结果",
+            "details": ["结构完整性", "引用来源", "数据泄露风险", "难度匹配"],
+        },
+        {
+            "agent": "反馈规划 Agent",
+            "title": "规划下一步",
+            "status": "completed",
+            "summary": (state.feedback_decision or {}).get("next_action", "保持当前路径，完成后进入下一关"),
+            "details": [f"下一关：{plan.next_name or '当前分支已完成'}"],
+        },
+    ]
+    resources.learning_report = {
+        "stage": plan.current_stage,
+        "completed_nodes": state.learner_profile.get("mastered_points", []),
+        "strengths": state.diagnosis.strengths if state.diagnosis else [],
+        "weak_points": state.diagnosis.weak_points if state.diagnosis else [],
+        "next_recommendation": plan.recommended_reason,
+    }
+
+
+def _build_lesson_modules(resources: GeneratedResources) -> list[LessonModule]:
+    return [
+        LessonModule(
+            title="为什么学这一关",
+            type="why",
+            content=resources.recommended_reason or "这一关是后续学习路径中的关键节点，完成后可以更稳地进入下一步。",
+            default_open=True,
+        ),
+        LessonModule(
+            title="核心概念讲义",
+            type="concept",
+            content=resources.theory_note,
+            default_open=True,
+        ),
+        LessonModule(
+            title="数据与任务说明",
+            type="dataset",
+            content=resources.dataset_instruction,
+        ),
+        LessonModule(
+            title="小结与下一步",
+            type="summary",
+            content=f"完成本关后，建议进入：{resources.next_focus or '阶段复盘'}。",
+        ),
+    ]
+
+
+def _build_common_errors(current_node: str) -> list[CommonError]:
+    base_errors = [
+        CommonError(
+            error="数据泄露",
+            cause="在划分训练集和测试集之前，对全量数据进行了 fit、标准化或缺失值统计。",
+            fix="先 train_test_split，再只在训练集上 fit 预处理器，并用同一个预处理器 transform 测试集。",
+        ),
+        CommonError(
+            error="只看准确率",
+            cause="分类任务中类别不平衡时，accuracy 可能掩盖模型漏判问题。",
+            fix="结合混淆矩阵、Precision、Recall、F1 或 ROC-AUC 一起判断。",
+        ),
+    ]
+    if current_node in {"python_basics", "numpy_basics", "pandas_basics"}:
+        base_errors.insert(0, CommonError(
+            error="代码能复制但不理解变量形状",
+            cause="没有确认 DataFrame、特征矩阵和标签向量分别是什么。",
+            fix="每一步都打印 shape、列名和前几行，先理解数据再训练模型。",
+        ))
+    return base_errors
+
+
+def _build_code_common_errors() -> list[CommonError]:
+    return [
+        CommonError(
+            error="ModuleNotFoundError",
+            cause="本地环境没有安装 scikit-learn、pandas 或 numpy。",
+            fix="在当前 Python 环境中安装缺失依赖，例如 pip install scikit-learn pandas numpy。",
+        ),
+        CommonError(
+            error="ValueError: Input contains NaN",
+            cause="特征中仍然存在缺失值，模型无法直接训练。",
+            fix="训练前使用 fillna、SimpleImputer 或删除缺失严重的列。",
+        ),
+    ]
+
 
 def _build_learning_path(target_node: str) -> list[str]:
     return list(BASE_PATH_TEMPLATES.get(target_node, BASE_PATH_TEMPLATES["logistic_regression"]))
