@@ -35,6 +35,7 @@ class Session(Base):
     id = Column(String, primary_key=True, index=True) # session_id (UUID)
     learner_id = Column(String, ForeignKey("learners.id"))
     target_algorithm = Column(String)
+    target_node = Column(String, nullable=True)       # 当前关卡节点 ID（缓存 key）
     current_phase = Column(String, default="init")    # init, diagnosing, learning, quizzing, completed
     
     # 存放诊断结果、生成的资料、评测快照等

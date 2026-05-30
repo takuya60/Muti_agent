@@ -20,6 +20,7 @@ app.add_middleware(
 )
 
 from backend.api.chat import router as chat_router
+from backend.api.learning_tree import router as learning_tree_router
 
 app.include_router(learner_router)
 app.include_router(session_router)
@@ -27,6 +28,7 @@ app.include_router(generation_router)
 app.include_router(feedback_router)
 app.include_router(evaluation_router)
 app.include_router(chat_router)
+app.include_router(learning_tree_router)
 
 # 启动时自动建表
 from backend.database import engine, Base

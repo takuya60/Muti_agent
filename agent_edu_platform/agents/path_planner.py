@@ -316,3 +316,104 @@ def _dedupe(nodes: list[str]) -> list[str]:
             seen.add(node)
             result.append(node)
     return result
+
+
+def build_learning_tree(learner: dict[str, Any], target_algorithm: str, kg: Any) -> dict[str, Any]:
+    """
+    构建完整的树状学习路径，供前端渲染知识树。
+
+    返回结构:
+    {
+        "trunk": [  # 共同基础主干
+            {"id": "python_basics", "name": "Python 基础", "mastered": True, "is_current": False},
+            ...
+        ],
+        "branches": [  # 各个分支
+            {
+                "id": "classification",
+                "title": "分类预测",
+                "description": "...",
+                "recommended": True,
+                "progress": 0.35,
+                "nodes": [
+                    {"id": "sigmoid_function", "name": "...", "mastered": False, "is_current": True},
+                    ...
+                ]
+            },
+            ...
+        ],
+        "current_node": "sigmoid_function",
+        "current_branch": "classification",  # 或 "trunk"
+        "direction": "classification",
+        "recommended_reason": "..."
+    }
+    """
+    mastered = set(infer_mastered_nodes(learner, learner.get("current_level", "beginner_plus")))
+    direction = resolve_direction(learner, target_algorithm)
+
+    # 在整个路径中找当前推荐节点
+    full_path = build_path_for_direction(direction)
+    current_node = recommend_current_node(full_path, list(mastered))
+
+    # 判断当前节点在主干还是分支
+    current_in_trunk = current_node in FOUNDATION_NODES
+    current_branch_id = "trunk" if current_in_trunk else direction
+
+    # 构建主干节点
+    trunk_nodes = []
+    for node_id in FOUNDATION_NODES:
+        trunk_nodes.append({
+            "id": node_id,
+            "name": node_name(kg, node_id),
+            "mastered": node_id in mastered,
+            "is_current": node_id == current_node,
+        })
+
+    # 构建各分支
+    branches = []
+    for branch_id, meta in BRANCH_META.items():
+        if branch_id == "common_foundation":
+            continue  # 主干已单独处理
+
+        branch_node_ids = BRANCH_NODES[branch_id]
+        completed = sum(1 for n in branch_node_ids if n in mastered)
+        progress = round(completed / max(1, len(branch_node_ids)), 2)
+        is_recommended = branch_id == direction
+
+        # 判断是否锁定（基础未完成 >2 个）
+        foundation_missing = sum(1 for n in FOUNDATION_NODES if n not in mastered)
+        locked_reason = ""
+        if foundation_missing > 2:
+            locked_reason = "建议先完成共同基础中的数据理解、特征处理和 sklearn 流程。"
+
+        nodes = []
+        for node_id in branch_node_ids:
+            nodes.append({
+                "id": node_id,
+                "name": node_name(kg, node_id),
+                "mastered": node_id in mastered,
+                "is_current": node_id == current_node,
+            })
+
+        branches.append({
+            "id": branch_id,
+            "title": meta["title"],
+            "description": meta["description"],
+            "recommended": is_recommended,
+            "progress": progress,
+            "locked_reason": locked_reason,
+            "nodes": nodes,
+        })
+
+    reason = recommended_reason(learner, direction, current_node, list(mastered))
+
+    return {
+        "trunk": trunk_nodes,
+        "branches": branches,
+        "current_node": current_node,
+        "current_node_name": node_name(kg, current_node),
+        "current_branch": current_branch_id,
+        "direction": direction,
+        "recommended_reason": reason,
+    }
+
