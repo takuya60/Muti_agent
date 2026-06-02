@@ -1,4 +1,0 @@
-{"problem_id": "complex_calculus_02", "status": "success", "domain": "complex_analysis", "answer": "** \\(\\displaystyle 0\\)", "response_length": 1770, "timestamp": "2026-05-31T20:03:18.869632"}
-{"problem_id": "complex_equation_01", "status": "success", "domain": "equation", "answer": "** \\(x = -1, \\; 1, \\; 2, \\; 3\\)", "response_length": 1526, "timestamp": "2026-05-31T20:03:50.315819"}
-{"problem_id": "complex_linear_algebra_03", "status": "success", "domain": "linear_algebra", "answer": "**", "response_length": 5630, "timestamp": "2026-05-31T20:06:01.607801"}
-{"problem_id": "complex_pde_04", "status": "success", "domain": "equation", "answer": "**", "response_length": 5314, "timestamp": "2026-05-31T20:07:10.367110"}
