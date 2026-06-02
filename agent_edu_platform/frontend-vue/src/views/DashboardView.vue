@@ -22,14 +22,35 @@ const progressPercent = computed(() => {
 })
 const completedCount = computed(() => learner.value?.mastered_points?.length || 0)
 
+import { watch, nextTick } from 'vue'
+
 const agentSteps = [
-  { agent: '画像诊断', desc: '分析学习基础' },
-  { agent: '路径规划', desc: '匹配知识图谱路径' },
-  { agent: '知识检索', desc: '查找知识库证据' },
-  { agent: '资源生成', desc: '生成讲义、代码和测验' },
-  { agent: '审核纠偏', desc: '检查难度、结构和引用' },
-  { agent: '反馈规划', desc: '给出下一步建议' }
+  { id: 'diagnose_agent', agent: '画像诊断', desc: '分析学习基础' },
+  { id: 'path_planner', agent: '路径规划', desc: '匹配图谱路径' },
+  { id: 'retrieval_agent', agent: '知识检索', desc: '查找知识库' },
+  { id: 'generator_agent', agent: '资源生成', desc: '生成核心内容' },
+  { id: 'review_agent', agent: '审核纠偏', desc: '检查结构引用' }
 ]
+
+const isStepDone = (stepId: string) => {
+  if (generationStore.activeNode === 'complete' || generationStore.activeNode === 'cache') return true
+  const currentIndex = agentSteps.findIndex(s => s.id === generationStore.activeNode)
+  const targetIndex = agentSteps.findIndex(s => s.id === stepId)
+  // 如果没匹配到，说明可能是错误或还没开始
+  if (currentIndex === -1) return false
+  return targetIndex < currentIndex
+}
+
+const terminalRef = ref<HTMLElement | null>(null)
+watch(() => generationStore.streamLogs.length, async () => {
+  await nextTick()
+  if (terminalRef.value) {
+    const body = terminalRef.value.querySelector('.terminal-body')
+    if (body) {
+      body.scrollTop = body.scrollHeight
+    }
+  }
+})
 
 onMounted(async () => {
   const saved = localStorage.getItem('agentedu-theme') as 'light' | 'dark' | null
@@ -39,7 +60,7 @@ onMounted(async () => {
     return
   }
   if (!generationStore.currentResource) {
-    await generationStore.generateResource(learnerStore.currentLearner)
+    await generationStore.generateResourceStream(learnerStore.currentLearner)
   }
 })
 
@@ -51,20 +72,20 @@ const toggleTheme = () => {
 const continueLearning = async () => {
   try {
     if (!generationStore.currentResource && learnerStore.currentLearner) {
-      await generationStore.generateResource(learnerStore.currentLearner)
+      await generationStore.generateResourceStream(learnerStore.currentLearner)
     }
     router.push('/learning')
   } catch (e: any) {
-    alert('生成学习资源失败：' + (e.response?.data?.detail || e.message || '未知错误'))
+    alert('生成学习资源失败：' + (e.message || '未知错误'))
   }
 }
 
 const refreshPlan = async () => {
   if (!learnerStore.currentLearner) return
   try {
-    await generationStore.generateResource(learnerStore.currentLearner)
+    await generationStore.generateResourceStream(learnerStore.currentLearner)
   } catch (e: any) {
-    alert('重新生成推荐失败：' + (e.response?.data?.detail || e.message || '未知错误'))
+    alert('重新生成推荐失败：' + (e.message || '未知错误'))
   }
 }
 
@@ -128,16 +149,54 @@ const profileLabel = (key: string, value?: string) => {
       </aside>
     </section>
 
-    <!-- ===== 生成中动画 ===== -->
+    <!-- ===== 生成中动画与实时终端 ===== -->
     <section v-if="generationStore.isGenerating" class="agent-loading panel" aria-live="polite">
-      <div class="spinner"></div>
-      <div>
-        <h2>多 Agent 正在协作生成学习资源</h2>
-        <ul>
-          <li v-for="step in agentSteps" :key="step.agent">
-            <strong>{{ step.agent }}</strong>：{{ step.desc }}
-          </li>
-        </ul>
+      <div class="agent-status-header">
+        <div class="spinner"></div>
+        <div>
+          <h2>多 Agent 正在协作生成学习资源</h2>
+          <p class="desc">系统通过 LangGraph 构建的流水线，正在为您定制个性化路径...</p>
+        </div>
+      </div>
+      
+      <div class="agent-steps-row">
+        <div 
+          v-for="step in agentSteps" 
+          :key="step.id" 
+          class="step-item"
+          :class="{
+            'active': generationStore.activeNode === step.id,
+            'done': isStepDone(step.id)
+          }"
+        >
+          <div class="step-icon">
+            <span v-if="isStepDone(step.id)" class="icon-done">✓</span>
+            <span v-else-if="generationStore.activeNode === step.id" class="pulse-dot"></span>
+            <span v-else class="icon-pending">·</span>
+          </div>
+          <div class="step-text">
+            <strong>{{ step.agent }}</strong>
+            <small>{{ step.desc }}</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="terminal-logs" ref="terminalRef">
+        <div class="terminal-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="title">agent-execution-logs ~ bash</span>
+        </div>
+        <div class="terminal-body">
+          <div 
+            v-for="log in generationStore.streamLogs" 
+            :key="log.id" 
+            :class="['log-line', log.type]"
+          >
+            {{ log.text }}
+          </div>
+        </div>
       </div>
     </section>
 
@@ -659,5 +718,131 @@ button {
   .nav-links { order: 3; width: 100%; justify-content: center; }
   .hero-actions { flex-direction: column; }
   .branch-grid { grid-template-columns: 1fr; }
+  .agent-steps-row { flex-direction: column; align-items: flex-start; gap: 12px; }
 }
+
+/* ===== SSE Terminal & Agent Steps UI ===== */
+.agent-loading {
+  max-width: 1200px;
+  margin: 16px auto 0;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.agent-status-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.agent-status-header h2 { margin-bottom: 4px; font-size: 18px; }
+.agent-status-header .desc { color: var(--muted); margin: 0; font-size: 14px; }
+.spinner {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid var(--primary-soft);
+  border-top-color: var(--primary);
+  animation: spin 850ms linear infinite;
+}
+
+.agent-steps-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  justify-content: space-between;
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+.step-item.active { opacity: 1; }
+.step-item.done { opacity: 0.8; }
+
+.step-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--solid);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.step-item.done .step-icon {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+.step-item.active .step-icon {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+  animation: pulse-animation 1.5s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+@keyframes pulse-animation {
+  to { box-shadow: 0 0 0 10px rgba(79, 70, 229, 0); }
+}
+
+.step-text strong { display: block; font-size: 13px; color: var(--text); }
+.step-text small { display: block; font-size: 11px; color: var(--muted); }
+
+/* Terminal Logs */
+.terminal-logs {
+  background: #0f172a; /* Slate 900 */
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  border: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+}
+.terminal-header {
+  background: #1e293b; /* Slate 800 */
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.terminal-header .dot {
+  width: 12px; height: 12px; border-radius: 50%;
+}
+.terminal-header .red { background: #ef4444; }
+.terminal-header .yellow { background: #f59e0b; }
+.terminal-header .green { background: #10b981; }
+.terminal-header .title {
+  margin-left: auto; margin-right: auto;
+  font-family: monospace; font-size: 12px; color: #94a3b8;
+}
+.terminal-body {
+  padding: 16px;
+  height: 240px;
+  overflow-y: auto;
+  font-family: 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  scroll-behavior: smooth;
+}
+.log-line {
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+.log-line.info { color: #38bdf8; } /* Light Blue */
+.log-line.warning { color: #fbbf24; } /* Amber */
+.log-line.success { color: #34d399; } /* Emerald */
+.log-line.error { color: #f87171; } /* Red */
+
 </style>

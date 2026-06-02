@@ -6,3 +6,7 @@ agent_edu_platform/data/*.db
 agent_edu_platform/data/vector_store/
 agent_edu_platform/frontend-vue/node_modules/
 agent_edu_platform/frontend-vue/dist/
+
+# 忽略 AI 工具生成的文件夹
+.agent/
+.claude/
