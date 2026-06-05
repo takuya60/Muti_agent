@@ -75,6 +75,40 @@ class KnowledgeGraphManager:
             path.append(target_node)
         return path
 
+    def add_dynamic_node(self, node_data: dict) -> bool:
+        """动态向图谱中添加新节点，成功返回 True"""
+        node_id = node_data.get("id")
+        if not node_id or node_id in self.graph:
+            return False
+            
+        # 添加节点
+        self.graph.add_node(
+            node_id, 
+            id=node_id,
+            name=node_data.get("name", node_id),
+            category=node_data.get("category", "动态扩展")
+        )
+        self.nodes_meta[node_id] = node_data
+        
+        # 添加前置依赖关系
+        for prereq in node_data.get("prerequisites", []):
+            if prereq in self.graph:
+                self.graph.add_edge(prereq, node_id, relation_type="prerequisite")
+                
+        # 持久化到 JSON
+        self.save()
+        return True
+
+    def save(self):
+        """保存当前图谱状态到 JSON 文件"""
+        import json
+        data = {
+            "nodes": [data for _, data in self.graph.nodes(data=True)],
+            "edges": [{"from": u, "to": v, "type": d.get("relation_type", "related")} for u, v, d in self.graph.edges(data=True)]
+        }
+        with open(self.data_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
     def recommend_next_node(self, target_node: str, mastered_nodes: list[str]) -> str:
         """
         核心算法：根据当前目标，和用户已掌握的知识点，推荐下一步应该学什么

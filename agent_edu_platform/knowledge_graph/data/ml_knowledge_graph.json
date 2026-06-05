@@ -1,121 +1,566 @@
 {
   "nodes": [
-    {"id": "python_basics", "name": "Python 基础语法", "category": "基础"},
-    {"id": "numpy_basics", "name": "NumPy 数组运算", "category": "基础"},
-    {"id": "pandas_basics", "name": "Pandas 数据处理", "category": "基础"},
-    {"id": "matplotlib_visualization", "name": "Matplotlib 数据可视化", "category": "基础"},
-
-    {"id": "ml_task_framing", "name": "机器学习任务定义", "category": "机器学习基础"},
-    {"id": "tabular_data_understanding", "name": "表格数据理解", "category": "机器学习基础"},
-    {"id": "missing_value_handling", "name": "缺失值处理", "category": "数据处理"},
-    {"id": "outlier_handling", "name": "异常值识别与处理", "category": "数据处理"},
-    {"id": "categorical_encoding", "name": "类别变量编码", "category": "特征工程"},
-    {"id": "feature_scaling", "name": "数值缩放：标准化与归一化", "category": "特征工程"},
-    {"id": "feature_engineering", "name": "特征构造与筛选", "category": "特征工程"},
-    {"id": "data_preprocessing", "name": "数据预处理与特征工程", "category": "工程"},
-
-    {"id": "train_validation_test_split", "name": "训练/验证/测试集划分", "category": "建模流程"},
-    {"id": "train_test_split", "name": "训练集与测试集划分", "category": "建模流程"},
-    {"id": "sklearn_workflow", "name": "sklearn 标准建模流程", "category": "建模流程"},
-    {"id": "sklearn_pipeline", "name": "Pipeline 防止数据泄漏", "category": "建模流程"},
-    {"id": "model_persistence", "name": "模型保存与实验复现", "category": "工程"},
-
-    {"id": "linear_algebra", "name": "线性代数基础", "category": "数学"},
-    {"id": "calculus", "name": "微积分与偏导数", "category": "数学"},
-    {"id": "probability", "name": "概率论基础", "category": "数学"},
-    {"id": "gradient_descent", "name": "梯度下降法", "category": "数学"},
-
-    {"id": "linear_regression", "name": "线性回归", "category": "监督学习-回归"},
-    {"id": "polynomial_regression", "name": "多项式回归", "category": "监督学习-回归"},
-    {"id": "ridge_lasso", "name": "Ridge 与 Lasso 正则化回归", "category": "监督学习-回归"},
-    {"id": "sigmoid_function", "name": "Sigmoid 函数", "category": "监督学习-分类"},
-    {"id": "cross_entropy_loss", "name": "交叉熵损失", "category": "监督学习-分类"},
-    {"id": "logistic_regression", "name": "逻辑回归", "category": "监督学习-分类"},
-    {"id": "knn_classifier", "name": "KNN 分类", "category": "监督学习-分类"},
-    {"id": "decision_tree", "name": "决策树", "category": "监督学习-分类"},
-    {"id": "tree_pruning", "name": "决策树剪枝与复杂度控制", "category": "监督学习-分类"},
-    {"id": "random_forest", "name": "随机森林", "category": "集成学习"},
-    {"id": "gradient_boosting", "name": "GBDT / XGBoost 思想", "category": "集成学习"},
-
-    {"id": "model_evaluation_metrics", "name": "分类模型评估指标", "category": "评估"},
-    {"id": "regression_metrics", "name": "回归模型评估指标", "category": "评估"},
-    {"id": "confusion_matrix", "name": "混淆矩阵", "category": "评估"},
-    {"id": "precision_recall_f1", "name": "Precision / Recall / F1", "category": "评估"},
-    {"id": "roc_auc_pr_curve", "name": "ROC-AUC 与 PR 曲线", "category": "评估"},
-    {"id": "cross_validation", "name": "K 折交叉验证", "category": "评估"},
-    {"id": "learning_validation_curve", "name": "学习曲线与验证曲线", "category": "评估"},
-    {"id": "regularization", "name": "正则化与过拟合", "category": "泛化"},
-    {"id": "class_imbalance", "name": "类别不平衡处理", "category": "泛化"},
-    {"id": "threshold_tuning", "name": "分类阈值调整", "category": "泛化"},
-
-    {"id": "pca_dimensionality_reduction", "name": "PCA 降维", "category": "无监督学习"},
-    {"id": "kmeans_clustering", "name": "K-Means 聚类", "category": "无监督学习"},
-    {"id": "dbscan_clustering", "name": "DBSCAN 聚类", "category": "无监督学习"},
-    {"id": "clustering_evaluation", "name": "聚类评估与可视化", "category": "无监督学习"},
-
-    {"id": "neural_network_intro", "name": "神经网络入门", "category": "深度学习"},
-    {"id": "forward_backward_propagation", "name": "前向传播与反向传播", "category": "深度学习"},
-    {"id": "activation_functions", "name": "激活函数", "category": "深度学习"},
-    {"id": "deep_learning_regularization", "name": "深度学习正则化与早停", "category": "深度学习"},
-    {"id": "keras_sequential_intro", "name": "Keras Sequential 快速实验", "category": "深度学习"}
+    {
+      "id": "python_basics",
+      "name": "Python 基础语法",
+      "category": "基础"
+    },
+    {
+      "id": "numpy_basics",
+      "name": "NumPy 数组运算",
+      "category": "基础"
+    },
+    {
+      "id": "pandas_basics",
+      "name": "Pandas 数据处理",
+      "category": "基础"
+    },
+    {
+      "id": "matplotlib_visualization",
+      "name": "Matplotlib 数据可视化",
+      "category": "基础"
+    },
+    {
+      "id": "ml_task_framing",
+      "name": "机器学习任务定义",
+      "category": "机器学习基础"
+    },
+    {
+      "id": "tabular_data_understanding",
+      "name": "表格数据理解",
+      "category": "机器学习基础"
+    },
+    {
+      "id": "missing_value_handling",
+      "name": "缺失值处理",
+      "category": "数据处理"
+    },
+    {
+      "id": "outlier_handling",
+      "name": "异常值识别与处理",
+      "category": "数据处理"
+    },
+    {
+      "id": "categorical_encoding",
+      "name": "类别变量编码",
+      "category": "特征工程"
+    },
+    {
+      "id": "feature_scaling",
+      "name": "数值缩放：标准化与归一化",
+      "category": "特征工程"
+    },
+    {
+      "id": "feature_engineering",
+      "name": "特征构造与筛选",
+      "category": "特征工程"
+    },
+    {
+      "id": "data_preprocessing",
+      "name": "数据预处理与特征工程",
+      "category": "工程"
+    },
+    {
+      "id": "train_validation_test_split",
+      "name": "训练/验证/测试集划分",
+      "category": "建模流程"
+    },
+    {
+      "id": "train_test_split",
+      "name": "训练集与测试集划分",
+      "category": "建模流程"
+    },
+    {
+      "id": "sklearn_workflow",
+      "name": "sklearn 标准建模流程",
+      "category": "建模流程"
+    },
+    {
+      "id": "sklearn_pipeline",
+      "name": "Pipeline 防止数据泄漏",
+      "category": "建模流程"
+    },
+    {
+      "id": "model_persistence",
+      "name": "模型保存与实验复现",
+      "category": "工程"
+    },
+    {
+      "id": "linear_algebra",
+      "name": "线性代数基础",
+      "category": "数学"
+    },
+    {
+      "id": "calculus",
+      "name": "微积分与偏导数",
+      "category": "数学"
+    },
+    {
+      "id": "probability",
+      "name": "概率论基础",
+      "category": "数学"
+    },
+    {
+      "id": "gradient_descent",
+      "name": "梯度下降法",
+      "category": "数学"
+    },
+    {
+      "id": "linear_regression",
+      "name": "线性回归",
+      "category": "监督学习-回归"
+    },
+    {
+      "id": "polynomial_regression",
+      "name": "多项式回归",
+      "category": "监督学习-回归"
+    },
+    {
+      "id": "ridge_lasso",
+      "name": "Ridge 与 Lasso 正则化回归",
+      "category": "监督学习-回归"
+    },
+    {
+      "id": "sigmoid_function",
+      "name": "Sigmoid 函数",
+      "category": "监督学习-分类"
+    },
+    {
+      "id": "cross_entropy_loss",
+      "name": "交叉熵损失",
+      "category": "监督学习-分类"
+    },
+    {
+      "id": "logistic_regression",
+      "name": "逻辑回归",
+      "category": "监督学习-分类"
+    },
+    {
+      "id": "knn_classifier",
+      "name": "KNN 分类",
+      "category": "监督学习-分类"
+    },
+    {
+      "id": "decision_tree",
+      "name": "决策树",
+      "category": "监督学习-分类"
+    },
+    {
+      "id": "tree_pruning",
+      "name": "决策树剪枝与复杂度控制",
+      "category": "监督学习-分类"
+    },
+    {
+      "id": "random_forest",
+      "name": "随机森林",
+      "category": "集成学习"
+    },
+    {
+      "id": "gradient_boosting",
+      "name": "GBDT / XGBoost 思想",
+      "category": "集成学习"
+    },
+    {
+      "id": "model_evaluation_metrics",
+      "name": "分类模型评估指标",
+      "category": "评估"
+    },
+    {
+      "id": "regression_metrics",
+      "name": "回归模型评估指标",
+      "category": "评估"
+    },
+    {
+      "id": "confusion_matrix",
+      "name": "混淆矩阵",
+      "category": "评估"
+    },
+    {
+      "id": "precision_recall_f1",
+      "name": "Precision / Recall / F1",
+      "category": "评估"
+    },
+    {
+      "id": "roc_auc_pr_curve",
+      "name": "ROC-AUC 与 PR 曲线",
+      "category": "评估"
+    },
+    {
+      "id": "cross_validation",
+      "name": "K 折交叉验证",
+      "category": "评估"
+    },
+    {
+      "id": "learning_validation_curve",
+      "name": "学习曲线与验证曲线",
+      "category": "评估"
+    },
+    {
+      "id": "regularization",
+      "name": "正则化与过拟合",
+      "category": "泛化"
+    },
+    {
+      "id": "class_imbalance",
+      "name": "类别不平衡处理",
+      "category": "泛化"
+    },
+    {
+      "id": "threshold_tuning",
+      "name": "分类阈值调整",
+      "category": "泛化"
+    },
+    {
+      "id": "pca_dimensionality_reduction",
+      "name": "PCA 降维",
+      "category": "无监督学习"
+    },
+    {
+      "id": "kmeans_clustering",
+      "name": "K-Means 聚类",
+      "category": "无监督学习"
+    },
+    {
+      "id": "dbscan_clustering",
+      "name": "DBSCAN 聚类",
+      "category": "无监督学习"
+    },
+    {
+      "id": "clustering_evaluation",
+      "name": "聚类评估与可视化",
+      "category": "无监督学习"
+    },
+    {
+      "id": "neural_network_intro",
+      "name": "神经网络入门",
+      "category": "深度学习"
+    },
+    {
+      "id": "forward_backward_propagation",
+      "name": "前向传播与反向传播",
+      "category": "深度学习"
+    },
+    {
+      "id": "activation_functions",
+      "name": "激活函数",
+      "category": "深度学习"
+    },
+    {
+      "id": "deep_learning_regularization",
+      "name": "深度学习正则化与早停",
+      "category": "深度学习"
+    },
+    {
+      "id": "keras_sequential_intro",
+      "name": "Keras Sequential 快速实验",
+      "category": "深度学习"
+    },
+    {
+      "id": "titanic_data_preprocessing_practice",
+      "name": "泰坦尼克号数据预处理实战",
+      "category": "案例实践"
+    },
+    {
+      "id": "data_visualization_intro",
+      "name": "数据可视化入门",
+      "category": "数据探索"
+    },
+    {
+      "id": "sklearn_pipeline_practice",
+      "name": "Scikit-learn管道实践",
+      "category": "机器学习流程"
+    }
   ],
   "edges": [
-    {"from": "python_basics", "to": "numpy_basics", "type": "prerequisite"},
-    {"from": "numpy_basics", "to": "pandas_basics", "type": "prerequisite"},
-    {"from": "pandas_basics", "to": "matplotlib_visualization", "type": "related"},
-    {"from": "pandas_basics", "to": "tabular_data_understanding", "type": "prerequisite"},
-    {"from": "ml_task_framing", "to": "tabular_data_understanding", "type": "prerequisite"},
-    {"from": "tabular_data_understanding", "to": "missing_value_handling", "type": "prerequisite"},
-    {"from": "tabular_data_understanding", "to": "outlier_handling", "type": "related"},
-    {"from": "missing_value_handling", "to": "categorical_encoding", "type": "prerequisite"},
-    {"from": "categorical_encoding", "to": "feature_scaling", "type": "prerequisite"},
-    {"from": "feature_scaling", "to": "feature_engineering", "type": "prerequisite"},
-    {"from": "feature_engineering", "to": "data_preprocessing", "type": "prerequisite"},
-    {"from": "data_preprocessing", "to": "train_validation_test_split", "type": "prerequisite"},
-    {"from": "train_validation_test_split", "to": "train_test_split", "type": "related"},
-    {"from": "train_validation_test_split", "to": "sklearn_workflow", "type": "prerequisite"},
-    {"from": "sklearn_workflow", "to": "sklearn_pipeline", "type": "prerequisite"},
-    {"from": "sklearn_workflow", "to": "model_persistence", "type": "related"},
-
-    {"from": "linear_algebra", "to": "linear_regression", "type": "prerequisite"},
-    {"from": "gradient_descent", "to": "linear_regression", "type": "related"},
-    {"from": "sklearn_workflow", "to": "linear_regression", "type": "prerequisite"},
-    {"from": "linear_regression", "to": "polynomial_regression", "type": "related"},
-    {"from": "linear_regression", "to": "ridge_lasso", "type": "related"},
-    {"from": "linear_regression", "to": "regression_metrics", "type": "prerequisite"},
-
-    {"from": "probability", "to": "sigmoid_function", "type": "prerequisite"},
-    {"from": "sigmoid_function", "to": "cross_entropy_loss", "type": "prerequisite"},
-    {"from": "cross_entropy_loss", "to": "logistic_regression", "type": "prerequisite"},
-    {"from": "sklearn_workflow", "to": "logistic_regression", "type": "prerequisite"},
-    {"from": "logistic_regression", "to": "threshold_tuning", "type": "related"},
-    {"from": "logistic_regression", "to": "class_imbalance", "type": "related"},
-    {"from": "logistic_regression", "to": "model_evaluation_metrics", "type": "prerequisite"},
-
-    {"from": "feature_scaling", "to": "knn_classifier", "type": "prerequisite"},
-    {"from": "sklearn_workflow", "to": "decision_tree", "type": "prerequisite"},
-    {"from": "decision_tree", "to": "tree_pruning", "type": "prerequisite"},
-    {"from": "tree_pruning", "to": "random_forest", "type": "related"},
-    {"from": "decision_tree", "to": "gradient_boosting", "type": "related"},
-
-    {"from": "confusion_matrix", "to": "precision_recall_f1", "type": "prerequisite"},
-    {"from": "precision_recall_f1", "to": "roc_auc_pr_curve", "type": "related"},
-    {"from": "model_evaluation_metrics", "to": "confusion_matrix", "type": "prerequisite"},
-    {"from": "model_evaluation_metrics", "to": "cross_validation", "type": "prerequisite"},
-    {"from": "cross_validation", "to": "learning_validation_curve", "type": "related"},
-    {"from": "cross_validation", "to": "regularization", "type": "related"},
-
-    {"from": "feature_scaling", "to": "pca_dimensionality_reduction", "type": "prerequisite"},
-    {"from": "pca_dimensionality_reduction", "to": "kmeans_clustering", "type": "related"},
-    {"from": "feature_scaling", "to": "kmeans_clustering", "type": "prerequisite"},
-    {"from": "kmeans_clustering", "to": "clustering_evaluation", "type": "prerequisite"},
-    {"from": "kmeans_clustering", "to": "dbscan_clustering", "type": "related"},
-
-    {"from": "linear_algebra", "to": "neural_network_intro", "type": "prerequisite"},
-    {"from": "gradient_descent", "to": "forward_backward_propagation", "type": "prerequisite"},
-    {"from": "neural_network_intro", "to": "forward_backward_propagation", "type": "prerequisite"},
-    {"from": "forward_backward_propagation", "to": "activation_functions", "type": "related"},
-    {"from": "activation_functions", "to": "deep_learning_regularization", "type": "related"},
-    {"from": "neural_network_intro", "to": "keras_sequential_intro", "type": "related"}
+    {
+      "from": "python_basics",
+      "to": "numpy_basics",
+      "type": "prerequisite"
+    },
+    {
+      "from": "numpy_basics",
+      "to": "pandas_basics",
+      "type": "prerequisite"
+    },
+    {
+      "from": "pandas_basics",
+      "to": "matplotlib_visualization",
+      "type": "related"
+    },
+    {
+      "from": "pandas_basics",
+      "to": "tabular_data_understanding",
+      "type": "prerequisite"
+    },
+    {
+      "from": "pandas_basics",
+      "to": "titanic_data_preprocessing_practice",
+      "type": "prerequisite"
+    },
+    {
+      "from": "pandas_basics",
+      "to": "data_visualization_intro",
+      "type": "prerequisite"
+    },
+    {
+      "from": "ml_task_framing",
+      "to": "tabular_data_understanding",
+      "type": "prerequisite"
+    },
+    {
+      "from": "tabular_data_understanding",
+      "to": "missing_value_handling",
+      "type": "prerequisite"
+    },
+    {
+      "from": "tabular_data_understanding",
+      "to": "outlier_handling",
+      "type": "related"
+    },
+    {
+      "from": "missing_value_handling",
+      "to": "categorical_encoding",
+      "type": "prerequisite"
+    },
+    {
+      "from": "missing_value_handling",
+      "to": "titanic_data_preprocessing_practice",
+      "type": "prerequisite"
+    },
+    {
+      "from": "categorical_encoding",
+      "to": "feature_scaling",
+      "type": "prerequisite"
+    },
+    {
+      "from": "categorical_encoding",
+      "to": "titanic_data_preprocessing_practice",
+      "type": "prerequisite"
+    },
+    {
+      "from": "categorical_encoding",
+      "to": "sklearn_pipeline_practice",
+      "type": "prerequisite"
+    },
+    {
+      "from": "feature_scaling",
+      "to": "feature_engineering",
+      "type": "prerequisite"
+    },
+    {
+      "from": "feature_scaling",
+      "to": "knn_classifier",
+      "type": "prerequisite"
+    },
+    {
+      "from": "feature_scaling",
+      "to": "pca_dimensionality_reduction",
+      "type": "prerequisite"
+    },
+    {
+      "from": "feature_scaling",
+      "to": "kmeans_clustering",
+      "type": "prerequisite"
+    },
+    {
+      "from": "feature_scaling",
+      "to": "sklearn_pipeline_practice",
+      "type": "prerequisite"
+    },
+    {
+      "from": "feature_engineering",
+      "to": "data_preprocessing",
+      "type": "prerequisite"
+    },
+    {
+      "from": "data_preprocessing",
+      "to": "train_validation_test_split",
+      "type": "prerequisite"
+    },
+    {
+      "from": "train_validation_test_split",
+      "to": "train_test_split",
+      "type": "related"
+    },
+    {
+      "from": "train_validation_test_split",
+      "to": "sklearn_workflow",
+      "type": "prerequisite"
+    },
+    {
+      "from": "sklearn_workflow",
+      "to": "sklearn_pipeline",
+      "type": "prerequisite"
+    },
+    {
+      "from": "sklearn_workflow",
+      "to": "model_persistence",
+      "type": "related"
+    },
+    {
+      "from": "sklearn_workflow",
+      "to": "linear_regression",
+      "type": "prerequisite"
+    },
+    {
+      "from": "sklearn_workflow",
+      "to": "logistic_regression",
+      "type": "prerequisite"
+    },
+    {
+      "from": "sklearn_workflow",
+      "to": "decision_tree",
+      "type": "prerequisite"
+    },
+    {
+      "from": "sklearn_workflow",
+      "to": "sklearn_pipeline_practice",
+      "type": "prerequisite"
+    },
+    {
+      "from": "linear_algebra",
+      "to": "linear_regression",
+      "type": "prerequisite"
+    },
+    {
+      "from": "linear_algebra",
+      "to": "neural_network_intro",
+      "type": "prerequisite"
+    },
+    {
+      "from": "probability",
+      "to": "sigmoid_function",
+      "type": "prerequisite"
+    },
+    {
+      "from": "gradient_descent",
+      "to": "linear_regression",
+      "type": "related"
+    },
+    {
+      "from": "gradient_descent",
+      "to": "forward_backward_propagation",
+      "type": "prerequisite"
+    },
+    {
+      "from": "linear_regression",
+      "to": "polynomial_regression",
+      "type": "related"
+    },
+    {
+      "from": "linear_regression",
+      "to": "ridge_lasso",
+      "type": "related"
+    },
+    {
+      "from": "linear_regression",
+      "to": "regression_metrics",
+      "type": "prerequisite"
+    },
+    {
+      "from": "sigmoid_function",
+      "to": "cross_entropy_loss",
+      "type": "prerequisite"
+    },
+    {
+      "from": "cross_entropy_loss",
+      "to": "logistic_regression",
+      "type": "prerequisite"
+    },
+    {
+      "from": "logistic_regression",
+      "to": "threshold_tuning",
+      "type": "related"
+    },
+    {
+      "from": "logistic_regression",
+      "to": "class_imbalance",
+      "type": "related"
+    },
+    {
+      "from": "logistic_regression",
+      "to": "model_evaluation_metrics",
+      "type": "prerequisite"
+    },
+    {
+      "from": "decision_tree",
+      "to": "tree_pruning",
+      "type": "prerequisite"
+    },
+    {
+      "from": "decision_tree",
+      "to": "gradient_boosting",
+      "type": "related"
+    },
+    {
+      "from": "tree_pruning",
+      "to": "random_forest",
+      "type": "related"
+    },
+    {
+      "from": "model_evaluation_metrics",
+      "to": "confusion_matrix",
+      "type": "prerequisite"
+    },
+    {
+      "from": "model_evaluation_metrics",
+      "to": "cross_validation",
+      "type": "prerequisite"
+    },
+    {
+      "from": "confusion_matrix",
+      "to": "precision_recall_f1",
+      "type": "prerequisite"
+    },
+    {
+      "from": "precision_recall_f1",
+      "to": "roc_auc_pr_curve",
+      "type": "related"
+    },
+    {
+      "from": "cross_validation",
+      "to": "learning_validation_curve",
+      "type": "related"
+    },
+    {
+      "from": "cross_validation",
+      "to": "regularization",
+      "type": "related"
+    },
+    {
+      "from": "pca_dimensionality_reduction",
+      "to": "kmeans_clustering",
+      "type": "related"
+    },
+    {
+      "from": "kmeans_clustering",
+      "to": "clustering_evaluation",
+      "type": "prerequisite"
+    },
+    {
+      "from": "kmeans_clustering",
+      "to": "dbscan_clustering",
+      "type": "related"
+    },
+    {
+      "from": "neural_network_intro",
+      "to": "forward_backward_propagation",
+      "type": "prerequisite"
+    },
+    {
+      "from": "neural_network_intro",
+      "to": "keras_sequential_intro",
+      "type": "related"
+    },
+    {
+      "from": "forward_backward_propagation",
+      "to": "activation_functions",
+      "type": "related"
+    },
+    {
+      "from": "activation_functions",
+      "to": "deep_learning_regularization",
+      "type": "related"
+    }
   ]
 }

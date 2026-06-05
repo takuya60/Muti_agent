@@ -1,7 +1,7 @@
 from schemas.agent_state_schema import WorkflowState
 
 
-def run_feedback_agent(state: WorkflowState, quiz_accuracy: float | None = None, learner_feedback: str = "") -> WorkflowState:
+def _fallback_feedback(quiz_accuracy: float | None, learner_feedback: str) -> tuple[str, str]:
     if quiz_accuracy is None:
         action = "保持当前路径，并在完成实操后进入测试题"
         resource_type = "standard_practice"
@@ -14,6 +14,39 @@ def run_feedback_agent(state: WorkflowState, quiz_accuracy: float | None = None,
     else:
         action = "生成同难度变式练习，巩固薄弱知识点"
         resource_type = "reinforcement"
+    return action, resource_type
+
+
+def _llm_feedback(quiz_accuracy: float | None, learner_feedback: str) -> tuple[str, str]:
+    import json
+    from agents.llm_service import call_llm_json
+    system_prompt = '''你是一个学习反馈规划师。
+根据学生的测验准确率和反馈，决定下一步的教学动作和资源类型。
+JSON 格式要求如下：
+{
+  "next_action": "生成降维解释...",
+  "resource_type": "standard_practice|remedial_explanation|advanced_challenge|reinforcement"
+}'''
+    data = call_llm_json(system_prompt, f"准确率：{quiz_accuracy}\n用户反馈：{learner_feedback}")
+    
+    rt = data.get("resource_type", "standard_practice")
+    if rt not in ["standard_practice", "remedial_explanation", "advanced_challenge", "reinforcement"]:
+        rt = "standard_practice"
+        
+    return data.get("next_action", "保持当前路径"), rt
+
+
+def run_feedback_agent(state: WorkflowState, quiz_accuracy: float | None = None, learner_feedback: str = "") -> WorkflowState:
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        action, resource_type = _llm_feedback(quiz_accuracy, learner_feedback)
+        engine = "llm"
+    except Exception as e:
+        logger.warning(f"LLM 反馈规划失败 ({e})")
+        action, resource_type = _fallback_feedback(quiz_accuracy, learner_feedback)
+        engine = "fallback"
 
     state.feedback_decision = {
         "quiz_accuracy": quiz_accuracy,
@@ -24,7 +57,8 @@ def run_feedback_agent(state: WorkflowState, quiz_accuracy: float | None = None,
     state.agent_events.append({
         "agent": "反馈决策 Agent",
         "status": "completed",
-        "summary": action,
+        "engine": engine,
+        "summary": f"[{'LLM 规划' if engine == 'llm' else '规则降级'}] {action}",
     })
     _sync_agent_trace(state.generated_resources or {}, action)
     return state

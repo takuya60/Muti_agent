@@ -52,7 +52,7 @@ _INITIAL_WEAK_POINTS = {
 }
 
 
-def run_diagnosis_agent(state: WorkflowState) -> WorkflowState:
+def _fallback_diagnosis(state: WorkflowState) -> DiagnosisResult:
     profile = state.learner_profile
     scores = profile.get("test_scores", {})
     weak_points = list(profile.get("weak_points", []))
@@ -104,7 +104,7 @@ def run_diagnosis_agent(state: WorkflowState) -> WorkflowState:
 
     strategy = "；".join(strategy_parts) or "用案例和图解降低理解门槛"
 
-    state.diagnosis = DiagnosisResult(
+    return DiagnosisResult(
         weak_points=weak_points,
         strengths=strengths,
         recommended_level=recommended_level,
@@ -115,9 +115,55 @@ def run_diagnosis_agent(state: WorkflowState) -> WorkflowState:
         ],
         explanation_strategy=strategy,
     )
+
+def _llm_diagnosis(state: WorkflowState) -> DiagnosisResult:
+    import json
+    from agents.llm_service import call_llm_json
+    
+    profile_json = json.dumps(state.learner_profile, ensure_ascii=False)
+    system_prompt = '''你是一个专业的机器学习教育学情诊断专家。
+请根据用户的画像数据，深度分析用户的学习状态。
+你需要输出一个严格合法的 JSON 对象，格式要求如下：
+{
+  "weak_points": ["薄弱点1", "薄弱点2"],
+  "strengths": ["优势1", "优势2"],
+  "recommended_level": "beginner|beginner_plus|intermediate|advanced",
+  "learning_objectives": ["目标1", "目标2", "目标3"],
+  "explanation_strategy": "..."
+}'''
+    
+    data = call_llm_json(system_prompt, f"用户画像数据：\n{profile_json}")
+    
+    level = data.get("recommended_level", "beginner_plus")
+    if level not in ["beginner", "beginner_plus", "intermediate", "advanced"]:
+        level = "beginner_plus"
+        
+    return DiagnosisResult(
+        weak_points=data.get("weak_points", []),
+        strengths=data.get("strengths", []),
+        recommended_level=level,
+        learning_objectives=data.get("learning_objectives", ["明确当前学习起点和下一步路径"]),
+        explanation_strategy=data.get("explanation_strategy", "用案例和图解降低理解门槛"),
+    )
+
+def run_diagnosis_agent(state: WorkflowState) -> WorkflowState:
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        diagnosis = _llm_diagnosis(state)
+        agent_status = "llm_completed"
+        logger.info(f"LLM 画像诊断成功，推荐难度：{diagnosis.recommended_level}")
+    except Exception as e:
+        logger.warning(f"LLM 画像诊断失败 ({type(e).__name__}: {e})，降级为规则诊断")
+        diagnosis = _fallback_diagnosis(state)
+        agent_status = "fallback_completed"
+        
+    state.diagnosis = diagnosis
     state.agent_events.append({
-        "agent": "学情诊断 Agent",
+        "agent": "画像诊断 Agent",
         "status": "completed",
-        "summary": f"识别出 {len(weak_points)} 个薄弱点，推荐难度为 {recommended_level}，策略：{strategy}",
+        "engine": "llm" if agent_status == "llm_completed" else "fallback",
+        "summary": f"[{'LLM 诊断' if agent_status == 'llm_completed' else '规则降级'}] 识别出 {len(diagnosis.weak_points)} 个薄弱点，策略：{diagnosis.explanation_strategy}",
     })
     return state

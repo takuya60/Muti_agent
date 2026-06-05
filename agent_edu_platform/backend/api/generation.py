@@ -9,7 +9,7 @@ from backend.models import Session
 from schemas.session_schema import SessionCreate
 
 from agents.workflow import run_workflow, _GRAPH
-from agents.path_planner import build_learning_plan, recommend_current_node, build_path_for_direction, resolve_direction, infer_mastered_nodes
+from agents.path_planner import build_learning_plan, recommend_current_node, build_path_for_direction, _fallback_resolve_direction, _fallback_infer_mastered_nodes
 from knowledge_graph.graph_builder import KnowledgeGraphManager
 from schemas.learner_schema import LearnerProfile
 
@@ -19,11 +19,11 @@ _kg = KnowledgeGraphManager()
 
 
 def _compute_current_node(profile: LearnerProfile) -> str:
-    """根据学习者画像计算当前应该学的节点 ID（用作缓存 key）"""
+    """根据学习者画像计算当前应该学的节点 ID（用作缓存 key，使用规则引擎极速计算）"""
     learner = profile.model_dump()
-    direction = resolve_direction(learner, profile.target_algorithm)
+    direction = _fallback_resolve_direction(learner, profile.target_algorithm)
     full_path = build_path_for_direction(direction)
-    mastered = infer_mastered_nodes(learner, learner.get("current_level", "beginner_plus"))
+    mastered = _fallback_infer_mastered_nodes(learner, learner.get("current_level", "beginner_plus"))
     return recommend_current_node(full_path, mastered)
 
 

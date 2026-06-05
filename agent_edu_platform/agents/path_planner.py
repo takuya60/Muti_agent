@@ -185,10 +185,10 @@ class LearningPlan:
 
 
 def build_learning_plan(learner: dict[str, Any], target_algorithm: str, kg: Any) -> LearningPlan:
-    mastered = infer_mastered_nodes(learner, learner.get("current_level", "beginner_plus"))
-    direction = resolve_direction(learner, target_algorithm)
+    direction, mastered_list, llm_reason, new_nodes = _get_path_decision(learner, target_algorithm, kg)
+    mastered = set(mastered_list)
     full_path = build_path_for_direction(direction)
-    current_node = recommend_current_node(full_path, mastered)
+    current_node = recommend_current_node(full_path, mastered_list)
     path_names = [node_name(kg, node) for node in full_path]
     current_name = node_name(kg, current_node)
     current_step_index = full_path.index(current_node) + 1 if current_node in full_path else 1
@@ -204,7 +204,7 @@ def build_learning_plan(learner: dict[str, Any], target_algorithm: str, kg: Any)
         current_name=current_name,
         current_stage=current_stage,
         current_branch=current_branch,
-        recommended_reason=recommended_reason(learner, direction, current_node, mastered),
+        recommended_reason=llm_reason if llm_reason else recommended_reason(learner, direction, current_node, mastered_list),
         full_path=full_path,
         path_names=path_names,
         current_step_index=current_step_index,
@@ -214,7 +214,7 @@ def build_learning_plan(learner: dict[str, Any], target_algorithm: str, kg: Any)
     )
 
 
-def resolve_direction(learner: dict[str, Any], target_algorithm: str) -> str:
+def _fallback_resolve_direction(learner: dict[str, Any], target_algorithm: str) -> str:
     target_direction = learner.get("target_direction") or "system_recommended"
     if target_direction != "system_recommended":
         return target_direction
@@ -241,7 +241,7 @@ def recommend_current_node(full_path: list[str], mastered_nodes: list[str]) -> s
     return full_path[-1] if full_path else "ml_task_framing"
 
 
-def infer_mastered_nodes(learner: dict[str, Any], profile_level: str) -> list[str]:
+def _fallback_infer_mastered_nodes(learner: dict[str, Any], profile_level: str) -> list[str]:
     mastered = set(learner.get("mastered_points", []))
     mastered.update(LEVEL_MASTERED_NODES.get(profile_level, []))
     mastered.update(PYTHON_LEVEL_MASTERED.get(learner.get("python_level", "basic"), []))
@@ -258,6 +258,65 @@ def infer_mastered_nodes(learner: dict[str, Any], profile_level: str) -> list[st
             mastered.add(node)
 
     return list(mastered)
+
+
+def _llm_path_decision(learner: dict[str, Any], target_algorithm: str, profile_level: str, kg: Any) -> tuple[str, list[str], str, list[str]]:
+    import json
+    from agents.llm_service import call_llm_json
+    
+    context = {
+        "learner_profile": learner,
+        "target_algorithm": target_algorithm,
+        "profile_level": profile_level,
+        "available_branches": {k: v["title"] for k, v in BRANCH_META.items()},
+        "foundation_nodes": FOUNDATION_NODES,
+        "branch_nodes": BRANCH_NODES
+    }
+    
+    system_prompt = '''你是一个智能的学习路径规划师。
+根据用户画像和目标，挑选最合适的分支，推断已掌握节点，并可按需补充新的学习节点。
+JSON 格式要求如下：
+{
+  "target_direction": "classification", // 必须是 available_branches 的键之一
+  "mastered_nodes": ["python_basics"], // 必须从 foundation_nodes 或 branch_nodes 挑选
+  "recommended_reason": "你已具备 Python 基础，推荐进入分类...",
+  "new_nodes": [ // 最多3个。如果在已有图谱里找不到合适的进阶/细化节点，可以在这里提议
+    {"id": "xgboost", "name": "XGBoost", "category": "集成学习", "branch": "model_explanation", "prerequisites": ["gradient_boosting"]}
+  ]
+}'''
+    
+    data = call_llm_json(system_prompt, f"规划数据：\n{json.dumps(context, ensure_ascii=False)}")
+    
+    direction = data.get("target_direction")
+    if direction not in BRANCH_META:
+        direction = "classification"
+        
+    mastered = data.get("mastered_nodes", [])
+    valid_mastered = [n for n in mastered if n in FOUNDATION_NODES or any(n in nodes for nodes in BRANCH_NODES.values())]
+    reason = data.get("recommended_reason", "系统基于画像推荐了此路径。")
+    
+    added_nodes = []
+    for node_data in data.get("new_nodes", [])[:3]:
+        branch = node_data.get("branch")
+        if branch in BRANCH_NODES and kg.add_dynamic_node(node_data):
+            if node_data["id"] not in BRANCH_NODES[branch]:
+                BRANCH_NODES[branch].append(node_data["id"])
+            added_nodes.append(node_data["id"])
+            
+    return direction, valid_mastered, reason, added_nodes
+
+
+def _get_path_decision(learner: dict[str, Any], target_algorithm: str, kg: Any) -> tuple[str, list[str], str, list[str]]:
+    import logging
+    logger = logging.getLogger(__name__)
+    profile_level = learner.get("current_level", "beginner_plus")
+    try:
+        direction, mastered, reason, added_nodes = _llm_path_decision(learner, target_algorithm, profile_level, kg)
+        logger.info(f"LLM 路径规划成功: 分支={direction}, 已掌握={len(mastered)}, 新增节点数={len(added_nodes)}")
+        return direction, mastered, reason, added_nodes
+    except Exception as e:
+        logger.warning(f"LLM 路径规划失败 ({type(e).__name__}: {e})")
+        return _fallback_resolve_direction(learner, target_algorithm), _fallback_infer_mastered_nodes(learner, profile_level), "", []
 
 
 def build_available_branches(mastered_nodes: list[str], current_direction: str) -> list[dict[str, Any]]:
@@ -321,39 +380,13 @@ def _dedupe(nodes: list[str]) -> list[str]:
 def build_learning_tree(learner: dict[str, Any], target_algorithm: str, kg: Any) -> dict[str, Any]:
     """
     构建完整的树状学习路径，供前端渲染知识树。
-
-    返回结构:
-    {
-        "trunk": [  # 共同基础主干
-            {"id": "python_basics", "name": "Python 基础", "mastered": True, "is_current": False},
-            ...
-        ],
-        "branches": [  # 各个分支
-            {
-                "id": "classification",
-                "title": "分类预测",
-                "description": "...",
-                "recommended": True,
-                "progress": 0.35,
-                "nodes": [
-                    {"id": "sigmoid_function", "name": "...", "mastered": False, "is_current": True},
-                    ...
-                ]
-            },
-            ...
-        ],
-        "current_node": "sigmoid_function",
-        "current_branch": "classification",  # 或 "trunk"
-        "direction": "classification",
-        "recommended_reason": "..."
-    }
     """
-    mastered = set(infer_mastered_nodes(learner, learner.get("current_level", "beginner_plus")))
-    direction = resolve_direction(learner, target_algorithm)
+    direction, mastered_list, llm_reason, new_nodes = _get_path_decision(learner, target_algorithm, kg)
+    mastered = set(mastered_list)
 
     # 在整个路径中找当前推荐节点
     full_path = build_path_for_direction(direction)
-    current_node = recommend_current_node(full_path, list(mastered))
+    current_node = recommend_current_node(full_path, mastered_list)
 
     # 判断当前节点在主干还是分支
     current_in_trunk = current_node in FOUNDATION_NODES
@@ -405,7 +438,7 @@ def build_learning_tree(learner: dict[str, Any], target_algorithm: str, kg: Any)
             "nodes": nodes,
         })
 
-    reason = recommended_reason(learner, direction, current_node, list(mastered))
+    reason = llm_reason if llm_reason else recommended_reason(learner, direction, current_node, mastered_list)
 
     return {
         "trunk": trunk_nodes,
