@@ -25,11 +25,11 @@ const completedCount = computed(() => learner.value?.mastered_points?.length || 
 import { watch, nextTick } from 'vue'
 
 const agentSteps = [
-  { id: 'diagnose_agent', agent: '画像诊断', desc: '分析学习基础' },
-  { id: 'path_planner', agent: '路径规划', desc: '匹配图谱路径' },
-  { id: 'retrieval_agent', agent: '知识检索', desc: '查找知识库' },
-  { id: 'generator_agent', agent: '资源生成', desc: '生成核心内容' },
-  { id: 'review_agent', agent: '审核纠偏', desc: '检查结构引用' }
+  { id: 'diagnosis', agent: '画像诊断', desc: '分析基础与路径' },
+  { id: 'retrieval', agent: '知识检索', desc: '查找本地知识库' },
+  { id: 'generation', agent: '资源生成', desc: '生成核心内容' },
+  { id: 'review', agent: '质量审核', desc: '执行交叉审查' },
+  { id: 'feedback', agent: '阶段报告', desc: '评估与后续反馈' }
 ]
 
 const isStepDone = (stepId: string) => {
@@ -835,14 +835,16 @@ button {
   font-size: 13px;
   line-height: 1.6;
   scroll-behavior: smooth;
+  color: #e2e8f0; /* 强制终端基础字体为浅色 */
 }
 .log-line {
   margin-bottom: 6px;
   word-break: break-all;
 }
-.log-line.info { color: #38bdf8; } /* Light Blue */
-.log-line.warning { color: #fbbf24; } /* Amber */
-.log-line.success { color: #34d399; } /* Emerald */
-.log-line.error { color: #f87171; } /* Red */
+.log-line.running { color: #a78bfa; } /* 紫色 */
+.log-line.info { color: #38bdf8; } /* 亮蓝色 */
+.log-line.warning { color: #fbbf24; } /* 琥珀色 */
+.log-line.success { color: #34d399; } /* 翡翠绿 */
+.log-line.error { color: #f87171; } /* 红色 */
 
 </style>

@@ -79,6 +79,7 @@ def generate_resources_stream(profile: LearnerProfile, db: DbSession = Depends(g
     ).order_by(Session.created_at.desc()).first()
 
     async def event_generator():
+        import asyncio
         if cached:
             # 伪造一个流式反馈以防前端 UI 突变
             msg = {"node": "cache", "status": "success", "message": "发现本地缓存，直接加载..."}
@@ -121,32 +122,29 @@ def generate_resources_stream(profile: LearnerProfile, db: DbSession = Depends(g
         final_state = None
         # LangGraph Stream
         try:
-            # 注意: _GRAPH.stream 是同步的，在 FastAPI 中 StreamingResponse 允许同步或异步 generator。
-            # 这里我们使用异步 generator 并把同步的 stream 放到迭代里。为了防止阻塞，可以考虑 to_thread，但由于是本地演示，直接跑也可以。
-            for output in _GRAPH.stream(initial_state):
+            # 改用真正的异步流 astream
+            async for output in _GRAPH.astream(initial_state):
                 for node_name, state_update in output.items():
                     msg = {"node": node_name, "status": "running", "message": f"Agent [{node_name}] 执行完毕..."}
-                    if node_name == "diagnose_agent":
-                        msg["message"] = "🧠 画像诊断完成，正在规划路径..."
-                    elif node_name == "path_planner":
-                        msg["message"] = "🗺️ 路径规划完成，正在检索底层知识库..."
-                    elif node_name == "retrieval_agent":
-                        msg["message"] = "📚 RAG 检索完成，开始生成教学内容..."
-                    elif node_name == "generator_agent":
-                        msg["message"] = "✨ 核心内容生成完毕，正在进行交叉审查..."
-                    elif node_name == "review_agent":
+                    if node_name == "diagnosis":
+                        msg["message"] = "🧠 画像诊断与路径规划完成，正在启动底层检索..."
+                    elif node_name == "retrieval":
+                        msg["message"] = "📚 RAG 本地知识库检索完成，开始生成教学内容..."
+                    elif node_name == "generation":
+                        msg["message"] = "✨ 核心资源与讲义生成完毕，正在进入交叉审查..."
+                    elif node_name == "review":
                         passed = state_update.get("review_passed", False)
                         if passed:
-                            msg["message"] = "✅ 质量审查通过！"
+                            msg["message"] = "✅ 质量与逻辑审查通过！"
                         else:
                             msg["status"] = "warning"
-                            msg["message"] = "⚠️ 审查发现问题，打回重做中..."
+                            msg["message"] = "⚠️ 审查发现偏离，打回重做中..."
+                    elif node_name == "feedback":
+                        msg["message"] = "📝 正在生成综合阶段报告与后续反馈..."
+                    elif node_name == "evaluate":
+                        msg["message"] = "📊 资源难度与知识点覆盖率评估完毕..."
 
                     yield f"data: {json.dumps(msg)}\n\n"
-                    # 更新 final_state，因为 stream 中每个块只包含增量，不过我们也可以从最后一个块拿。
-                    # 其实 LangGraph stream 也会给出更新，我们可以最后自己构造或从 output 提取。
-                    # 但最好是获取完整的 final state，实际上 LangGraph 的 state_update 是增量。
-                    # 为了简化，我们只在最后自己做一次查询或从 db 里写。
                     
                     if state_update:
                         if final_state is None:
@@ -165,7 +163,6 @@ def generate_resources_stream(profile: LearnerProfile, db: DbSession = Depends(g
             db_session.generated_resources = final_state["generated_resources"]
             db_session.target_node = current_node
             if final_state.get("diagnosis"):
-                # 如果是 pydantic model 就要 model_dump，如果是 dict 就直接赋值
                 diag = final_state["diagnosis"]
                 db_session.diagnosis_summary = diag.model_dump() if hasattr(diag, 'model_dump') else diag
             db.commit()
@@ -183,4 +180,12 @@ def generate_resources_stream(profile: LearnerProfile, db: DbSession = Depends(g
             err = {"node": "error", "status": "error", "message": "生成失败，未获得资源"}
             yield f"data: {json.dumps(err)}\n\n"
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
