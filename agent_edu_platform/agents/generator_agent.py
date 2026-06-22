@@ -149,10 +149,11 @@ def run_generator_agent(state: WorkflowState) -> WorkflowState:
     _enrich_resources(resources, state, level)
 
     state.generated_resources = resources.model_dump()
+    retry_info = f" (第 {state.retry_count} 次重试)" if state.retry_count > 0 else ""
     state.agent_events.append({
         "agent": "资源生成 Agent",
         "status": "completed",
-        "summary": f"[{resources.generation_mode}] 生成 {resources.title}，包含讲义、实操指南和分阶测试题",
+        "summary": f"[{resources.generation_mode}] 生成 {resources.title}{retry_info}，包含讲义、实操指南和分阶测试题",
     })
     return state
 

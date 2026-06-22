@@ -181,7 +181,7 @@ class LearningPlan:
     current_step_index: int
     total_steps: int
     next_name: str
-    available_branches: list[dict[str, Any]]
+    available_branches: list[Any]
 
 
 def build_learning_plan(learner: dict[str, Any], target_algorithm: str, kg: Any) -> LearningPlan:
@@ -319,9 +319,10 @@ def _get_path_decision(learner: dict[str, Any], target_algorithm: str, kg: Any) 
         return _fallback_resolve_direction(learner, target_algorithm), _fallback_infer_mastered_nodes(learner, profile_level), "", []
 
 
-def build_available_branches(mastered_nodes: list[str], current_direction: str) -> list[dict[str, Any]]:
+def build_available_branches(mastered_nodes: list[str], current_direction: str) -> list[Any]:
+    from schemas.resource_schema import LearningBranch
     mastered = set(mastered_nodes)
-    branches: list[dict[str, Any]] = []
+    branches: list[Any] = []
     foundation_missing = [node for node in FOUNDATION_NODES if node not in mastered]
 
     for branch_id, meta in BRANCH_META.items():
@@ -331,14 +332,14 @@ def build_available_branches(mastered_nodes: list[str], current_direction: str) 
         locked_reason = ""
         if branch_id != "common_foundation" and len(foundation_missing) > 2:
             locked_reason = "建议先完成共同基础中的数据理解、特征处理和 sklearn 流程。"
-        branches.append({
-            "id": branch_id,
-            "title": meta["title"],
-            "description": meta["description"],
-            "progress": progress,
-            "recommended": branch_id == current_direction,
-            "locked_reason": locked_reason,
-        })
+        branches.append(LearningBranch(
+            id=branch_id,
+            title=meta["title"],
+            description=meta["description"],
+            progress=progress,
+            recommended=branch_id == current_direction,
+            locked_reason=locked_reason,
+        ))
 
     return branches
 

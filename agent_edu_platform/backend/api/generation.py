@@ -138,7 +138,8 @@ def generate_resources_stream(profile: LearnerProfile, db: DbSession = Depends(g
                             msg["message"] = "✅ 质量与逻辑审查通过！"
                         else:
                             msg["status"] = "warning"
-                            msg["message"] = "⚠️ 审查发现偏离，打回重做中..."
+                            feedback = state_update.get("reviewer_feedback", "发现漏洞")
+                            msg["message"] = f"⚠️ 审查未通过 ({feedback})，打回重做中..."
                     elif node_name == "feedback":
                         msg["message"] = "📝 正在生成综合阶段报告与后续反馈..."
                     elif node_name == "evaluate":

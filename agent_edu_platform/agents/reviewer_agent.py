@@ -83,6 +83,7 @@ def run_reviewer_agent(state: WorkflowState) -> WorkflowState:
         state.reviewer_feedback = "；".join(all_issues)
         status = "failed"
         summary = state.reviewer_feedback
+        logger.warning(f"⭕ [审核被打回] 原因清单:\n" + "\n".join([f"  {i+1}. {issue}" for i, issue in enumerate(all_issues)]))
     else:
         state.review_passed = True
         state.reviewer_feedback = llm_summary if agent_status == "llm" else "规则审核通过"
@@ -100,15 +101,33 @@ def run_reviewer_agent(state: WorkflowState) -> WorkflowState:
 
 
 def _sync_agent_trace(resources: dict, agent: str, status: str, summary: str) -> None:
+    from schemas.resource_schema import AgentTraceStep
     trace = resources.get("agent_trace") or {}
-    steps = trace.get("steps") or []
-    for step in steps:
-        if step.get("agent") == agent:
-            step["status"] = status
-            step["summary"] = summary
+    
+    # 获取或初始化 steps 列表
+    if "steps" not in trace:
+        trace["steps"] = []
+    
+    # 由于旧代码可能存为字典，先处理
+    steps = trace["steps"]
+    
+    for i, step in enumerate(steps):
+        # 兼容 isinstance 判断，因为有些可能已经是 AgentTraceStep 对象
+        is_match = False
+        if hasattr(step, "agent") and getattr(step, "agent") == agent:
+            is_match = True
+        elif isinstance(step, dict) and step.get("agent") == agent:
+            is_match = True
+            
+        if is_match:
+            if hasattr(step, "status"):
+                step.status = status
+                step.summary = summary
+            else:
+                step["status"] = status
+                step["summary"] = summary
             break
     else:
-        steps.append({"agent": agent, "status": status, "summary": summary})
+        steps.append(AgentTraceStep(agent=agent, title=f"{agent} 检查", status=status, summary=summary))
     
-    trace["steps"] = steps
     resources["agent_trace"] = trace

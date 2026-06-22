@@ -65,21 +65,40 @@ def run_feedback_agent(state: WorkflowState, quiz_accuracy: float | None = None,
 
 
 def _sync_agent_trace(resources: dict, action: str) -> None:
+    from schemas.resource_schema import AgentTraceStep
     trace = resources.get("agent_trace") or {}
-    steps = trace.get("steps") or []
+    
+    # 获取或初始化 steps 列表
+    if "steps" not in trace:
+        trace["steps"] = []
+        
+    steps = trace["steps"]
     next_focus = resources.get("next_focus") or "当前阶段复盘"
-    for step in steps:
-        if step.get("agent") == "反馈规划 Agent":
-            step["status"] = "completed"
-            step["summary"] = action
-            step["details"] = [f"下一关：{next_focus}"]
+    
+    for i, step in enumerate(steps):
+        is_match = False
+        if hasattr(step, "agent") and getattr(step, "agent") == "反馈规划 Agent":
+            is_match = True
+        elif isinstance(step, dict) and step.get("agent") == "反馈规划 Agent":
+            is_match = True
+            
+        if is_match:
+            if hasattr(step, "status"):
+                step.status = "completed"
+                step.summary = action
+                step.details = [f"下一关：{next_focus}"]
+            else:
+                step["status"] = "completed"
+                step["summary"] = action
+                step["details"] = [f"下一关：{next_focus}"]
             return
-    steps.append({
-        "agent": "反馈规划 Agent",
-        "title": "规划下一步",
-        "status": "completed",
-        "summary": action,
-        "details": [f"下一关：{next_focus}"],
-    })
-    trace["steps"] = steps
+            
+    steps.append(AgentTraceStep(
+        agent="反馈规划 Agent",
+        title="规划下一步",
+        status="completed",
+        summary=action,
+        details=[f"下一关：{next_focus}"]
+    ))
+    
     resources["agent_trace"] = trace

@@ -269,6 +269,16 @@
       "id": "sklearn_pipeline_practice",
       "name": "Scikit-learn管道实践",
       "category": "机器学习流程"
+    },
+    {
+      "id": "end_to_end_ml_pipeline",
+      "name": "端到端ML项目实践",
+      "category": "实践"
+    },
+    {
+      "id": "guided_ml_code_practice",
+      "name": "引导式机器学习代码实践",
+      "category": "实践"
     }
   ],
   "edges": [
@@ -415,6 +425,11 @@
     {
       "from": "sklearn_workflow",
       "to": "sklearn_pipeline_practice",
+      "type": "prerequisite"
+    },
+    {
+      "from": "sklearn_workflow",
+      "to": "end_to_end_ml_pipeline",
       "type": "prerequisite"
     },
     {
